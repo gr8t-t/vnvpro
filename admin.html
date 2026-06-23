@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — VNV Pro</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { background: var(--bg); min-height: 100vh; }
+
+    .admin-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .admin-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+
+    .admin-main {
+      display: flex;
+      min-height: calc(100vh - 60px);
+    }
+
+    .admin-sidebar {
+      width: 220px;
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      padding: 16px 0;
+      flex-shrink: 0;
+      position: sticky;
+      top: 60px;
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      font-family: inherit;
+      position: relative;
+    }
+
+    .sidebar-item:hover { background: var(--bg3); color: var(--text); }
+    .sidebar-item.active { background: rgba(124,58,237,0.12); color: var(--accent2); }
+    .sidebar-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--accent);
+      border-radius: 0 2px 2px 0;
+    }
+
+    .sidebar-badge {
+      margin-left: auto;
+      background: var(--red);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    .admin-content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Auth overlay */
+    #authOverlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .auth-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+    }
+
+    .auth-box h2 { font-size: 20px; margin-bottom: 20px; }
+
+    /* Voice model form */
+    .voice-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .voice-admin-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .voice-admin-card h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .voice-admin-card .folder { font-size: 11px; color: var(--text2); font-family: monospace; margin-bottom: 8px; }
+
+    .request-row {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    .request-row .req-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .request-row .req-email { font-size: 13px; font-weight: 600; }
+    .request-row .req-voice { font-size: 14px; font-weight: 700; color: var(--accent2); }
+    .request-row .req-desc { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+    .request-row .req-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+    .price-set-wrap { display: flex; gap: 6px; align-items: center; }
+    .price-set-wrap input { width: 80px; }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
+    }
+
+    .setting-row:last-child { border-bottom: none; }
+    .setting-row .setting-label { font-size: 14px; font-weight: 500; }
+    .setting-row .setting-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .setting-row .setting-input { display: flex; gap: 8px; align-items: center; }
+    .setting-row input { width: 120px; }
+
+    audio { width: 100%; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- Auth overlay -->
+  <div id="authOverlay">
+    <div class="auth-box">
+      <div style="font-size:32px; margin-bottom:12px;">🔐</div>
+      <h2>Admin Access</h2>
+      <div class="form-group">
+        <input type="password" class="form-input" id="adminPwInput" placeholder="Admin password" onkeydown="if(event.key==='Enter')adminLogin()">
+      </div>
+      <div style="color:var(--red); font-size:13px; margin-bottom:12px; display:none;" id="authError">Incorrect password.</div>
+      <button class="btn btn-primary w-full" onclick="adminLogin()">Login</button>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="admin-header">
+    <a href="index.html" class="admin-logo">
+      <div class="logo-icon">✦</div>
+      VNV Pro Admin
+    </a>
+    <button class="btn btn-ghost btn-sm" onclick="adminLogout()">Logout</button>
+  </header>
+
+  <div class="admin-main">
+    <!-- Sidebar -->
+    <nav class="admin-sidebar">
+      <button class="sidebar-item active" onclick="showPage('users', this)">👤 Users</button>
+      <button class="sidebar-item" onclick="showPage('voices', this)">🎙 Voices</button>
+      <button class="sidebar-item" onclick="showPage('requests', this)" id="requestsTab">
+        🎤 Requests <span class="sidebar-badge hidden" id="reqBadge">0</span>
+      </button>
+      <button class="sidebar-item" onclick="showPage('approvals', this)" id="approvalsTab">
+        ✅ Approvals <span class="sidebar-badge hidden" id="approvalsBadge">0</span>
+      </button>
+      <button class="sidebar-item" onclick="showPage('settings', this)">⚙️ Settings</button>
+    </nav>
+
+    <!-- Content -->
+    <main class="admin-content">
+
+      <!-- USERS page -->
+      <div class="page active" id="page-users">
+        <div class="page-title">
+          👤 Users
+          <button class="btn btn-primary btn-sm" onclick="openAddUser()">+ Add User</button>
+        </div>
+        <div class="table-wrap">
+          <table id="usersTable">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Access Code</th>
+                <th>Coins</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersBody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- VOICES page -->
+      <div class="page" id="page-voices">
+        <div class="page-title">
+          🎙 Voice Models
+          <button class="btn btn-primary btn-sm" onclick="openAddVoice()">+ Add Voice</button>
+        </div>
+        <div class="voice-grid" id="voicesGrid">
+          <p style="color:var(--text2);">Loading...</p>
+        </div>
+      </div>
+
+      <!-- REQUESTS page -->
+      <div class="page" id="page-requests">
+        <div class="page-title">🎤 Voice Requests</div>
+        <div id="requestsList"><p style="color:var(--text2);">Loading...</p></div>
+      </div>
+
+      <!-- APPROVALS page -->
+      <div class="page" id="page-approvals">
+        <div class="page-title">✅ Approvals</div>
+
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">Pending Signups</h3>
+        <div class="table-wrap" style="margin-bottom:24px;">
+          <table>
+            <thead>
+              <tr><th>Email</th><th>Payment</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="signupsPendingBody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text2);padding:16px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">Pending Coin Topups</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Email</th><th>Package</th><th>Payment</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="topupsPendingBody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text2);padding:16px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SETTINGS page -->
+      <div class="page" id="page-settings">
+        <div class="page-title">⚙️ Settings</div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Drain Rates (coins/second)</h3>
+          <div class="setting-row">
+            <div><div class="setting-label">Video Only</div><div class="setting-sub">Per second of video streaming</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="rateVideo" step="0.1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveRate('video')">Save</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Voice Only</div><div class="setting-sub">Per second of audio streaming</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="rateAudio" step="0.1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveRate('audio')">Save</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Video + Voice</div><div class="setting-sub">Per second of combined streaming</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="rateBoth" step="0.1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveRate('both')">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Coin Packages</h3>
+          <div id="pkgSettingsWrap"></div>
+          <button class="btn btn-secondary btn-sm mt-2" onclick="savePkgs()">Save Packages</button>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Crypto Wallets</h3>
+          <div class="form-group">
+            <label class="form-label">TRC20 USDT Address</label>
+            <input type="text" class="form-input" id="walletTrc20">
+          </div>
+          <div class="form-group">
+            <label class="form-label">ERC20 USDT Address</label>
+            <input type="text" class="form-input" id="walletErc20">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Bitcoin Address</label>
+            <input type="text" class="form-input" id="walletBtc">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveWallets()">Save Wallets</button>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Bank Details</h3>
+          <div class="form-group">
+            <label class="form-label">Bank Name</label>
+            <input type="text" class="form-input" id="bankName">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Name</label>
+            <input type="text" class="form-input" id="bankAccountName">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account Number</label>
+            <input type="text" class="form-input" id="bankAccountNumber">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sort Code / Routing (optional)</label>
+            <input type="text" class="form-input" id="bankSortCode">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Note (optional)</label>
+            <input type="text" class="form-input" id="bankNote" placeholder="e.g. Use your email as reference">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveBank()">Save Bank Details</button>
+          <button class="btn btn-danger btn-sm" style="margin-left:8px;" onclick="clearBank()">Clear</button>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Signup Fee</h3>
+          <div class="setting-row">
+            <div><div class="setting-label">Signup Fee (USD)</div><div class="setting-sub">One-time fee to activate account</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="signupFeeInput" step="1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveSignupFee()">Save</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">RVC Server URL</h3>
+          <div class="form-group">
+            <label class="form-label">Server URL (e.g. https://xxxx.ngrok.io)</label>
+            <input type="text" class="form-input" id="rvcUrlInput" placeholder="https://xxxx.ngrok-free.app">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveRvcUrl()">Save RVC URL</button>
+          <p style="font-size:12px;color:var(--text2);margin-top:8px;">Start the rvc-server/start.bat, then paste the ngrok URL here.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Add User Modal -->
+  <div class="modal-overlay hidden" id="addUserModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Add User</span>
+        <button class="modal-close" onclick="closeModal('addUserModal')">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" class="form-input" id="newUserEmail">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-input" id="newUserPw">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Starting Coins</label>
+        <input type="number" class="form-input" id="newUserCoins" value="500">
+      </div>
+      <button class="btn btn-primary w-full" onclick="addUser()">Add User</button>
+    </div>
+  </div>
+
+  <!-- Grant Coins Modal -->
+  <div class="modal-overlay hidden" id="grantCoinsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Grant / Deduct Coins</span>
+        <button class="modal-close" onclick="closeModal('grantCoinsModal')">✕</button>
+      </div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;" id="grantCoinsTarget"></p>
+      <div class="form-group">
+        <label class="form-label">Amount (negative to deduct)</label>
+        <input type="number" class="form-input" id="grantAmount" placeholder="e.g. 500 or -100">
+      </div>
+      <button class="btn btn-primary w-full" onclick="doGrantCoins()">Apply</button>
+    </div>
+  </div>
+
+  <!-- Add Voice Modal -->
+  <div class="modal-overlay hidden" id="addVoiceModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <span class="modal-title" id="voiceModalTitle">Add Voice Model</span>
+        <button class="modal-close" onclick="closeModal('addVoiceModal')">✕</button>
+      </div>
+      <input type="hidden" id="editVoiceId">
+      <div class="form-group">
+        <label class="form-label">Voice Name</label>
+        <input type="text" class="form-input" id="vName" placeholder="e.g. Morgan Freeman">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Folder Name (must match models/ directory)</label>
+        <input type="text" class="form-input" id="vFolder" placeholder="e.g. morgan_freeman">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <input type="text" class="form-input" id="vDesc" placeholder="Deep, calm voice">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preview MP3 Upload</label>
+        <input type="file" class="form-input" id="vPreviewFile" accept="audio/mp3,audio/mpeg,audio/*">
+      </div>
+      <div class="form-group">
+        <label class="form-label">OR Preview MP3 URL</label>
+        <input type="text" class="form-input" id="vPreviewUrl" placeholder="https://example.com/preview.mp3">
+      </div>
+      <div style="display:flex;gap:16px;margin-bottom:16px;">
+        <label class="toggle-wrap">
+          <span class="toggle"><input type="checkbox" id="vIsPublic" checked><span class="toggle-slider"></span></span>
+          <span style="font-size:13px;">Public (available to all)</span>
+        </label>
+        <label class="toggle-wrap">
+          <span class="toggle"><input type="checkbox" id="vIsPremium"><span class="toggle-slider"></span></span>
+          <span style="font-size:13px;">Premium (paid)</span>
+        </label>
+      </div>
+      <div class="form-group" id="vPriceWrap" style="display:none;">
+        <label class="form-label">Price (USD)</label>
+        <input type="number" class="form-input" id="vPrice" value="0" min="0">
+      </div>
+      <button class="btn btn-primary w-full" onclick="saveVoice()">Save Voice</button>
+    </div>
+  </div>
+
+  <!-- Set Price Modal -->
+  <div class="modal-overlay hidden" id="setPriceModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Set Price &amp; Approve Request</span>
+        <button class="modal-close" onclick="closeModal('setPriceModal')">✕</button>
+      </div>
+      <input type="hidden" id="setPriceReqId">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;" id="setPriceReqInfo"></p>
+      <div class="form-group">
+        <label class="form-label">Price (USD)</label>
+        <input type="number" class="form-input" id="setPriceAmount" min="0" placeholder="e.g. 25">
+      </div>
+      <button class="btn btn-primary w-full" onclick="doApproveRequest()">Set Price &amp; Approve</button>
+    </div>
+  </div>
+
+  <!-- Confirm Payment Modal -->
+  <div class="modal-overlay hidden" id="confirmPaymentModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Confirm Payment &amp; Add Voice</span>
+        <button class="modal-close" onclick="closeModal('confirmPaymentModal')">✕</button>
+      </div>
+      <input type="hidden" id="confirmPayReqId">
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;" id="confirmPayInfo"></p>
+      <div class="form-group">
+        <label class="form-label">Voice Folder Name (models/ directory)</label>
+        <input type="text" class="form-input" id="confirmPayFolder" placeholder="e.g. custom_voice_001">
+      </div>
+      <button class="btn btn-success w-full" onclick="doConfirmPayment()">Confirm &amp; Unlock Voice</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    let adminPw = '';
+    let grantTargetEmail = '';
+    let editVoiceData = null;
+    let allVoiceRequests = [];
+
+    // Toast
+    function showToast(msg, type = 'info') {
+      const toast = document.getElementById('toast');
+      const el = document.createElement('div');
+      el.className = `toast-item toast-${type}`;
+      el.textContent = msg;
+      toast.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    function escHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function formatDate(ts) {
+      if (!ts) return '—';
+      return new Date(ts).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    }
+
+    // ─── AUTH ────────────────────────────────────────────────────────────────────
+    function adminLogin() {
+      const pw = document.getElementById('adminPwInput').value;
+      if (!pw) return;
+      adminPw = pw;
+      loadAll();
+      document.getElementById('authOverlay').style.display = 'none';
+    }
+
+    function adminLogout() {
+      adminPw = '';
+      document.getElementById('authOverlay').style.display = 'flex';
+      document.getElementById('adminPwInput').value = '';
+    }
+
+    // ─── PAGES ───────────────────────────────────────────────────────────────────
+    function showPage(name, btn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.sidebar-item').forEach(b => b.classList.remove('active'));
+      document.getElementById('page-' + name).classList.add('active');
+      btn.classList.add('active');
+
+      if (name === 'users') loadUsers();
+      if (name === 'voices') loadVoiceModels();
+      if (name === 'requests') loadRequests();
+      if (name === 'approvals') loadApprovals();
+      if (name === 'settings') loadSettings();
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    async function api(body) {
+      const res = await fetch('/api/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, password: adminPw })
+      });
+      return res.json();
+    }
+
+    async function coinsApi(body) {
+      const res = await fetch('/api/coins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, password: adminPw })
+      });
+      return res.json();
+    }
+
+    async function signupApi(body) {
+      const res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, password: adminPw })
+      });
+      return res.json();
+    }
+
+    async function voicesApi(body) {
+      const res = await fetch('/api/voices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, password: adminPw })
+      });
+      return res.json();
+    }
+
+    function loadAll() {
+      loadUsers();
+      loadBadges();
+    }
+
+    // ─── USERS ───────────────────────────────────────────────────────────────────
+    async function loadUsers() {
+      const data = await api({ action: 'get_users' });
+      const users = data.users || [];
+      const tbody = document.getElementById('usersBody');
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No users yet.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>${escHtml(u.email)}</td>
+          <td><code style="font-size:11px;color:var(--accent2);">${escHtml(u.accessCode || '—')}</code></td>
+          <td id="coins-${escHtml(u.email)}">${(u.coins || 0).toLocaleString()}</td>
+          <td><span class="badge ${u.active ? 'badge-green' : 'badge-gray'}">${u.active ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="openGrantCoins('${escHtml(u.email)}')">Coins</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteUser('${escHtml(u.email)}')">Delete</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    function openAddUser() { openModal('addUserModal'); }
+
+    async function addUser() {
+      const email = document.getElementById('newUserEmail').value.trim();
+      const pw = document.getElementById('newUserPw').value;
+      const coins = parseInt(document.getElementById('newUserCoins').value) || 500;
+      if (!email || !pw) { showToast('Email and password required.', 'error'); return; }
+      const data = await api({ action: 'add_user', email, userPassword: pw, coins });
+      if (data.ok) {
+        showToast('User added.', 'success');
+        closeModal('addUserModal');
+        loadUsers();
+      } else {
+        showToast(data.error || 'Failed.', 'error');
+      }
+    }
+
+    async function deleteUser(email) {
+      if (!confirm(`Delete user ${email}?`)) return;
+      const data = await api({ action: 'delete_user', targetEmail: email });
+      if (data.ok) { showToast('User deleted.', 'success'); loadUsers(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    function openGrantCoins(email) {
+      grantTargetEmail = email;
+      document.getElementById('grantCoinsTarget').textContent = 'User: ' + email;
+      document.getElementById('grantAmount').value = '';
+      openModal('grantCoinsModal');
+    }
+
+    async function doGrantCoins() {
+      const amount = parseInt(document.getElementById('grantAmount').value);
+      if (isNaN(amount)) { showToast('Enter a valid amount.', 'error'); return; }
+      const data = await api({ action: 'grant_coins', targetEmail: grantTargetEmail, amount });
+      if (data.ok) {
+        showToast(`Coins updated. New balance: ${data.balance}`, 'success');
+        closeModal('grantCoinsModal');
+        loadUsers();
+      } else {
+        showToast(data.error || 'Failed.', 'error');
+      }
+    }
+
+    // ─── VOICE MODELS ─────────────────────────────────────────────────────────────
+    async function loadVoiceModels() {
+      const data = await voicesApi({ action: 'list', email: 'admin' });
+      const vs = data.voices || [];
+      const grid = document.getElementById('voicesGrid');
+      if (vs.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text2);">No voice models yet. Add one to get started.</p>';
+        return;
+      }
+      grid.innerHTML = vs.map(v => `
+        <div class="voice-admin-card">
+          <h4>${escHtml(v.name)} ${v.isPremium ? '💎' : ''} ${v.isPublic ? '🌍' : '🔒'}</h4>
+          <div class="folder">${escHtml(v.folderName)}</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${escHtml(v.description || '')}</div>
+          ${(v.previewUrl || v.previewBase64) ? `<audio controls src="${v.previewUrl || ('data:audio/mpeg;base64,' + v.previewBase64)}" style="width:100%;margin-bottom:8px;"></audio>` : '<div style="font-size:11px;color:var(--text2);margin-bottom:8px;">No preview</div>'}
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-ghost btn-sm" onclick='editVoice(${JSON.stringify(v).replace(/'/g,"&#39;")})'>Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteVoice('${v.id}')">Delete</button>
+          </div>
+        </div>`).join('');
+    }
+
+    function openAddVoice() {
+      editVoiceData = null;
+      document.getElementById('voiceModalTitle').textContent = 'Add Voice Model';
+      document.getElementById('editVoiceId').value = '';
+      document.getElementById('vName').value = '';
+      document.getElementById('vFolder').value = '';
+      document.getElementById('vDesc').value = '';
+      document.getElementById('vPreviewUrl').value = '';
+      document.getElementById('vIsPublic').checked = true;
+      document.getElementById('vIsPremium').checked = false;
+      document.getElementById('vPrice').value = '0';
+      document.getElementById('vPriceWrap').style.display = 'none';
+      openModal('addVoiceModal');
+    }
+
+    function editVoice(v) {
+      editVoiceData = v;
+      document.getElementById('voiceModalTitle').textContent = 'Edit Voice Model';
+      document.getElementById('editVoiceId').value = v.id;
+      document.getElementById('vName').value = v.name || '';
+      document.getElementById('vFolder').value = v.folderName || '';
+      document.getElementById('vDesc').value = v.description || '';
+      document.getElementById('vPreviewUrl').value = v.previewUrl || '';
+      document.getElementById('vIsPublic').checked = !!v.isPublic;
+      document.getElementById('vIsPremium').checked = !!v.isPremium;
+      document.getElementById('vPrice').value = v.price || 0;
+      document.getElementById('vPriceWrap').style.display = v.isPremium ? 'block' : 'none';
+      openModal('addVoiceModal');
+    }
+
+    document.getElementById('vIsPremium').addEventListener('change', function() {
+      document.getElementById('vPriceWrap').style.display = this.checked ? 'block' : 'none';
+    });
+
+    async function saveVoice() {
+      const id = document.getElementById('editVoiceId').value;
+      const name = document.getElementById('vName').value.trim();
+      const folderName = document.getElementById('vFolder').value.trim();
+      const description = document.getElementById('vDesc').value.trim();
+      const previewUrl = document.getElementById('vPreviewUrl').value.trim();
+      const isPublic = document.getElementById('vIsPublic').checked;
+      const isPremium = document.getElementById('vIsPremium').checked;
+      const price = parseFloat(document.getElementById('vPrice').value) || 0;
+
+      if (!name || !folderName) { showToast('Name and folder name required.', 'error'); return; }
+
+      // Handle preview file upload
+      const fileInput = document.getElementById('vPreviewFile');
+      let previewBase64 = '';
+      if (fileInput.files[0]) {
+        previewBase64 = await readFileAsBase64(fileInput.files[0]);
+      }
+
+      const action = id ? 'update_voice' : 'add_voice';
+      const body = { action, name, folderName, description, previewUrl, isPublic, isPremium, price };
+      if (id) body.id = id;
+      if (previewBase64) body.previewBase64 = previewBase64;
+
+      const data = await voicesApi(body);
+      if (data.ok) {
+        showToast('Voice saved.', 'success');
+        closeModal('addVoiceModal');
+        loadVoiceModels();
+      } else {
+        showToast(data.error || 'Failed.', 'error');
+      }
+    }
+
+    async function deleteVoice(id) {
+      if (!confirm('Delete this voice model?')) return;
+      const data = await voicesApi({ action: 'delete_voice', id });
+      if (data.ok) { showToast('Deleted.', 'success'); loadVoiceModels(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const b64 = e.target.result.split(',')[1];
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ─── VOICE REQUESTS ───────────────────────────────────────────────────────────
+    async function loadRequests() {
+      const data = await voicesApi({ action: 'get_requests' });
+      allVoiceRequests = data.requests || [];
+      renderRequests();
+    }
+
+    function renderRequests() {
+      const list = document.getElementById('requestsList');
+      const pending = allVoiceRequests.filter(r => r.status === 'pending');
+      const approved = allVoiceRequests.filter(r => r.status === 'approved');
+      const paid = allVoiceRequests.filter(r => r.status === 'paid');
+      const rejected = allVoiceRequests.filter(r => r.status === 'rejected');
+
+      if (allVoiceRequests.length === 0) {
+        list.innerHTML = '<p style="color:var(--text2);">No voice requests yet.</p>';
+        return;
+      }
+
+      const renderSection = (title, items) => {
+        if (items.length === 0) return '';
+        return `<h3 style="font-size:14px;font-weight:700;color:var(--text2);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.05em;">${title} (${items.length})</h3>` +
+          items.map(r => `
+            <div class="request-row">
+              <div class="req-header">
+                <div>
+                  <div class="req-voice">${escHtml(r.voiceName)}</div>
+                  <div class="req-email">${escHtml(r.email)}</div>
+                </div>
+                <span class="badge ${r.status === 'pending' ? 'badge-gray' : r.status === 'approved' ? 'badge-purple' : r.status === 'paid' ? 'badge-green' : 'badge-red'}">${r.status}</span>
+              </div>
+              <div class="req-desc">${escHtml(r.description)}${r.notes ? ' | ' + escHtml(r.notes) : ''}</div>
+              <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">${formatDate(r.createdAt)}</div>
+              <div class="req-actions">
+                ${r.status === 'pending' ? `
+                  <button class="btn btn-primary btn-sm" onclick="openSetPrice('${r.id}', '${escHtml(r.voiceName)}', '${escHtml(r.email)}')">Set Price &amp; Approve</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectRequest('${r.id}')">Reject</button>
+                ` : ''}
+                ${r.status === 'approved' ? `
+                  <span style="font-size:12px;color:var(--text2);">Price: $${r.price || 0}</span>
+                  <button class="btn btn-success btn-sm" onclick="openConfirmPayment('${r.id}', '${escHtml(r.voiceName)}', '${escHtml(r.email)}')">Confirm Payment</button>
+                  <button class="btn btn-danger btn-sm" onclick="rejectRequest('${r.id}')">Reject</button>
+                ` : ''}
+                ${r.status === 'paid' ? `<span style="font-size:12px;color:var(--green);">✓ Voice unlocked for user</span>` : ''}
+                ${r.status === 'rejected' ? `<span style="font-size:12px;color:var(--red);">Rejected</span>` : ''}
+              </div>
+            </div>`).join('');
+      };
+
+      list.innerHTML = renderSection('Pending', pending) + renderSection('Approved', approved) + renderSection('Paid / Completed', paid) + renderSection('Rejected', rejected);
+    }
+
+    function openSetPrice(id, voiceName, email) {
+      document.getElementById('setPriceReqId').value = id;
+      document.getElementById('setPriceReqInfo').textContent = `Voice: "${voiceName}" requested by ${email}`;
+      document.getElementById('setPriceAmount').value = '';
+      openModal('setPriceModal');
+    }
+
+    async function doApproveRequest() {
+      const id = document.getElementById('setPriceReqId').value;
+      const price = parseFloat(document.getElementById('setPriceAmount').value);
+      if (isNaN(price) || price < 0) { showToast('Enter a valid price.', 'error'); return; }
+      const data = await voicesApi({ action: 'approve_request', id, price });
+      if (data.ok) {
+        showToast('Request approved.', 'success');
+        closeModal('setPriceModal');
+        loadRequests();
+        loadBadges();
+      } else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function rejectRequest(id) {
+      if (!confirm('Reject this request?')) return;
+      const data = await voicesApi({ action: 'reject_request', id });
+      if (data.ok) { showToast('Rejected.', 'success'); loadRequests(); loadBadges(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    function openConfirmPayment(id, voiceName, email) {
+      document.getElementById('confirmPayReqId').value = id;
+      document.getElementById('confirmPayInfo').textContent = `Confirm payment for "${voiceName}" (${email}). Enter the folder name to create in models/.`;
+      document.getElementById('confirmPayFolder').value = '';
+      openModal('confirmPaymentModal');
+    }
+
+    async function doConfirmPayment() {
+      const id = document.getElementById('confirmPayReqId').value;
+      const folderName = document.getElementById('confirmPayFolder').value.trim();
+      if (!folderName) { showToast('Enter a folder name.', 'error'); return; }
+      const data = await voicesApi({ action: 'confirm_payment', id, folderName });
+      if (data.ok) {
+        showToast('Payment confirmed. Voice unlocked for user.', 'success');
+        closeModal('confirmPaymentModal');
+        loadRequests();
+      } else showToast(data.error || 'Failed.', 'error');
+    }
+
+    // ─── APPROVALS ────────────────────────────────────────────────────────────────
+    async function loadApprovals() {
+      const [signupsData, topupsData] = await Promise.all([
+        signupApi({ action: 'get_pending' }),
+        coinsApi({ action: 'get_pending_topups' })
+      ]);
+
+      // Signups
+      const signups = signupsData.pending || [];
+      const signupsBody = document.getElementById('signupsPendingBody');
+      if (signups.length === 0) {
+        signupsBody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text2);padding:16px;">No pending signups.</td></tr>';
+      } else {
+        signupsBody.innerHTML = signups.map(s => `
+          <tr>
+            <td>${escHtml(s.email)}</td>
+            <td>${escHtml(s.paymentMethod || 'crypto')}</td>
+            <td>${formatDate(s.createdAt)}</td>
+            <td>
+              <button class="btn btn-success btn-sm" onclick="approveSignup('${escHtml(s.email)}')">Approve</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectSignup('${escHtml(s.email)}')">Reject</button>
+            </td>
+          </tr>`).join('');
+      }
+
+      // Topups
+      const topups = topupsData.topups || [];
+      const topupsBody = document.getElementById('topupsPendingBody');
+      if (topups.length === 0) {
+        topupsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:16px;">No pending topups.</td></tr>';
+      } else {
+        topupsBody.innerHTML = topups.map(t => `
+          <tr>
+            <td>${escHtml(t.email)}</td>
+            <td>${escHtml(t.packageLabel || t.packageId || '—')}</td>
+            <td>${escHtml(t.network || 'bank')} ${t.txHash ? '(' + escHtml(t.txHash.substring(0,12)) + '...)' : ''}</td>
+            <td>${formatDate(t.createdAt)}</td>
+            <td>
+              <button class="btn btn-success btn-sm" onclick="approveTopup('${t.id}')">Approve</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectTopup('${t.id}')">Reject</button>
+            </td>
+          </tr>`).join('');
+      }
+
+      // Update badge
+      const total = signups.length + topups.length;
+      const badge = document.getElementById('approvalsBadge');
+      badge.textContent = total;
+      badge.classList.toggle('hidden', total === 0);
+    }
+
+    async function approveSignup(email) {
+      const data = await signupApi({ action: 'approve', targetEmail: email });
+      if (data.ok) { showToast('Signup approved. Access code: ' + (data.accessCode || ''), 'success'); loadApprovals(); loadBadges(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function rejectSignup(email) {
+      if (!confirm('Reject signup for ' + email + '?')) return;
+      const data = await signupApi({ action: 'reject', targetEmail: email });
+      if (data.ok) { showToast('Signup rejected.', 'success'); loadApprovals(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function approveTopup(id) {
+      const data = await coinsApi({ action: 'approve_topup', topupId: id });
+      if (data.ok) { showToast('Topup approved. New balance: ' + data.balance, 'success'); loadApprovals(); loadBadges(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function rejectTopup(id) {
+      if (!confirm('Reject this topup?')) return;
+      const data = await coinsApi({ action: 'reject_topup', topupId: id });
+      if (data.ok) { showToast('Topup rejected.', 'success'); loadApprovals(); }
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function loadBadges() {
+      try {
+        const [reqData, signupsData, topupsData] = await Promise.all([
+          voicesApi({ action: 'get_pending_count' }),
+          signupApi({ action: 'get_pending' }),
+          coinsApi({ action: 'get_pending_topups' })
+        ]);
+        const reqCount = reqData.count || 0;
+        const reqBadge = document.getElementById('reqBadge');
+        reqBadge.textContent = reqCount;
+        reqBadge.classList.toggle('hidden', reqCount === 0);
+
+        const approvalTotal = (signupsData.pending || []).length + (topupsData.topups || []).length;
+        const approvalBadge = document.getElementById('approvalsBadge');
+        approvalBadge.textContent = approvalTotal;
+        approvalBadge.classList.toggle('hidden', approvalTotal === 0);
+      } catch (_) {}
+    }
+
+    // ─── SETTINGS ─────────────────────────────────────────────────────────────────
+    async function loadSettings() {
+      const [ratesData, pkgData, walletData, bankData, feeData, rvcData] = await Promise.all([
+        coinsApi({ action: 'get_rates' }),
+        coinsApi({ action: 'get_packages' }),
+        api({ action: 'get_wallets' }),
+        api({ action: 'get_bank' }),
+        fetch('/api/signup?action=get_fee').then(r => r.json()),
+        api({ action: 'get_rvc_url' })
+      ]);
+
+      // Rates
+      const rates = ratesData.rates || {};
+      document.getElementById('rateVideo').value = rates.video ?? 2.0;
+      document.getElementById('rateAudio').value = rates.audio ?? 0.5;
+      document.getElementById('rateBoth').value = rates.both ?? 2.5;
+
+      // Packages
+      const pkgs = pkgData.packages || [];
+      const wrap = document.getElementById('pkgSettingsWrap');
+      wrap.innerHTML = pkgs.map((p, i) => `
+        <div style="display:grid;grid-template-columns:1fr 1fr 80px 80px 60px 80px;gap:8px;margin-bottom:8px;align-items:center;">
+          <input type="text" class="form-input" value="${escHtml(p.label)}" id="pkg_label_${i}" placeholder="Label">
+          <input type="number" class="form-input" value="${p.coins}" id="pkg_coins_${i}" placeholder="Coins">
+          <input type="number" class="form-input" value="${p.priceUsd}" id="pkg_usd_${i}" placeholder="USD">
+          <input type="number" class="form-input" value="${p.priceNaira}" id="pkg_ngn_${i}" placeholder="NGN">
+          <label class="toggle-wrap" style="margin:0;">
+            <span class="toggle"><input type="checkbox" id="pkg_feat_${i}" ${p.featured ? 'checked' : ''}><span class="toggle-slider"></span></span>
+            <span style="font-size:11px;">Pop</span>
+          </label>
+          <input type="hidden" id="pkg_id_${i}" value="${escHtml(p.id)}">
+        </div>`).join('');
+
+      // Wallets
+      const w = walletData.wallets || {};
+      document.getElementById('walletTrc20').value = w.trc20 || '';
+      document.getElementById('walletErc20').value = w.erc20 || '';
+      document.getElementById('walletBtc').value = w.btc || '';
+
+      // Bank
+      const b = bankData.bank || {};
+      document.getElementById('bankName').value = b.bankName || '';
+      document.getElementById('bankAccountName').value = b.accountName || '';
+      document.getElementById('bankAccountNumber').value = b.accountNumber || '';
+      document.getElementById('bankSortCode').value = b.sortCode || '';
+      document.getElementById('bankNote').value = b.note || '';
+
+      // Signup fee
+      document.getElementById('signupFeeInput').value = feeData.fee || 5;
+
+      // RVC URL
+      document.getElementById('rvcUrlInput').value = rvcData.url || '';
+    }
+
+    async function saveRate(type) {
+      const val = parseFloat(document.getElementById('rate' + type.charAt(0).toUpperCase() + type.slice(1)).value);
+      const data = await coinsApi({ action: 'set_rates', rates: { [type]: val } });
+      if (data.ok) showToast('Rate saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function savePkgs() {
+      const inputs = document.querySelectorAll('[id^="pkg_label_"]');
+      const pkgs = Array.from(inputs).map((_, i) => ({
+        id: document.getElementById('pkg_id_' + i).value,
+        label: document.getElementById('pkg_label_' + i).value,
+        coins: parseInt(document.getElementById('pkg_coins_' + i).value),
+        priceUsd: parseFloat(document.getElementById('pkg_usd_' + i).value),
+        priceNaira: parseFloat(document.getElementById('pkg_ngn_' + i).value),
+        featured: document.getElementById('pkg_feat_' + i).checked
+      }));
+      const data = await coinsApi({ action: 'set_packages', packages: pkgs });
+      if (data.ok) showToast('Packages saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function saveWallets() {
+      const data = await api({
+        action: 'set_wallets',
+        wallets: {
+          trc20: document.getElementById('walletTrc20').value.trim(),
+          erc20: document.getElementById('walletErc20').value.trim(),
+          btc: document.getElementById('walletBtc').value.trim()
+        }
+      });
+      if (data.ok) showToast('Wallets saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function saveBank() {
+      const data = await api({
+        action: 'set_bank',
+        bank: {
+          bankName: document.getElementById('bankName').value.trim(),
+          accountName: document.getElementById('bankAccountName').value.trim(),
+          accountNumber: document.getElementById('bankAccountNumber').value.trim(),
+          sortCode: document.getElementById('bankSortCode').value.trim(),
+          note: document.getElementById('bankNote').value.trim()
+        }
+      });
+      if (data.ok) showToast('Bank details saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function clearBank() {
+      if (!confirm('Clear bank details?')) return;
+      const data = await api({ action: 'clear_bank' });
+      if (data.ok) {
+        showToast('Bank details cleared.', 'success');
+        loadSettings();
+      } else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function saveSignupFee() {
+      const fee = parseFloat(document.getElementById('signupFeeInput').value);
+      const res = await fetch('/api/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_fee', fee, password: adminPw })
+      });
+      const data = await res.json();
+      if (data.ok) showToast('Signup fee saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function saveRvcUrl() {
+      const url = document.getElementById('rvcUrlInput').value.trim();
+      const data = await api({ action: 'set_rvc_url', url });
+      if (data.ok) showToast('RVC URL saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
+    }
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.add('hidden');
+      });
+    });
+  </script>
+</body>
+</html>

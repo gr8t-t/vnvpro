@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VNV Pro — App</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .app-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .app-logo .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .coin-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent2);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .coin-chip:hover {
+      background: rgba(124,58,237,0.25);
+      border-color: var(--accent);
+    }
+
+    .mode-badge {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Main layout */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+    }
+
+    .app-content {
+      padding: 20px 24px;
+      flex: 1;
+    }
+
+    /* Mode selector */
+    .mode-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .mode-btn {
+      flex: 1;
+      min-width: 160px;
+      padding: 14px 16px;
+      background: var(--bg2);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mode-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .mode-btn.active {
+      border-color: var(--accent);
+      background: rgba(124,58,237,0.1);
+      color: var(--text);
+    }
+
+    .mode-btn .mode-icon { font-size: 22px; }
+
+    .mode-btn .mode-info { display: flex; flex-direction: column; }
+    .mode-btn .mode-name { font-size: 14px; font-weight: 700; }
+    .mode-btn .mode-rate-text { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+    /* Two-column layout */
+    .app-columns {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Voice panel */
+    .voice-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .voices-list {
+      max-height: 420px;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .voice-card {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 4px;
+    }
+
+    .voice-card:hover {
+      background: var(--bg3);
+      border-color: var(--border);
+    }
+
+    .voice-card.selected {
+      background: rgba(124,58,237,0.1);
+      border-color: var(--accent);
+    }
+
+    .voice-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .voice-name {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .voice-desc {
+      font-size: 11px;
+      color: var(--text2);
+      line-height: 1.4;
+    }
+
+    .voice-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      align-items: center;
+    }
+
+    .preview-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      color: var(--text2);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .preview-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+
+    .lock-icon {
+      font-size: 14px;
+      color: var(--text2);
+    }
+
+    .voice-empty {
+      padding: 32px 16px;
+      text-align: center;
+      color: var(--text2);
+      font-size: 13px;
+    }
+
+    /* Stream area */
+    .stream-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .stream-area {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 16px;
+      min-height: 280px;
+    }
+
+    .video-box {
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      position: relative;
+      aspect-ratio: 16/9;
+    }
+
+    .video-box video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .video-label {
+      position: absolute;
+      bottom: 8px;
+      left: 8px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .video-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg3);
+      border-radius: 10px;
+      color: var(--text2);
+      font-size: 13px;
+      gap: 8px;
+      aspect-ratio: 16/9;
+    }
+
+    .video-placeholder .placeholder-icon { font-size: 36px; opacity: 0.5; }
+
+    /* Audio-only display */
+    .audio-display {
+      display: none;
+      grid-column: 1 / -1;
+      padding: 32px;
+    }
+
+    .audio-meters {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+    }
+
+    .audio-meter {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .meter-icon { font-size: 48px; }
+
+    .level-bar {
+      width: 8px;
+      height: 80px;
+      background: var(--bg3);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .level-fill {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: var(--green);
+      border-radius: 4px;
+      transition: height 0.1s;
+      height: 0%;
+    }
+
+    .level-fill.output { background: var(--accent2); }
+
+    .meter-label { font-size: 12px; color: var(--text2); font-weight: 600; }
+
+    .audio-arrow { font-size: 32px; color: var(--accent); }
+
+    /* Controls */
+    .controls-panel {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: flex-end;
+    }
+
+    .control-group {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .control-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text2);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .prompt-input {
+      width: 100%;
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .status-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text2);
+    }
+
+    .status-dot.streaming {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+    }
+
+    .billing-counter {
+      display: none;
+      padding: 4px 10px;
+      background: rgba(124,58,237,0.15);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--accent2);
+      font-weight: 600;
+    }
+
+    .stream-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Buy coins modal */
+    .coin-pkg-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .coin-pkg {
+      padding: 14px;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      position: relative;
+    }
+
+    .coin-pkg:hover, .coin-pkg.selected {
+      border-color: var(--accent);
+      background: rgba(124,58,237,0.08);
+    }
+
+    .coin-pkg .pkg-coins {
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--accent2);
+    }
+
+    .coin-pkg .pkg-label {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    .coin-pkg .pkg-price {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 6px;
+    }
+
+    .coin-pkg .featured-tag {
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #fff;
+      font-size: 9px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .network-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 12px;
+      background: var(--bg3);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .network-tab {
+      flex: 1;
+      padding: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .network-tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .network-pane { display: none; }
+    .network-pane.active { display: block; }
+
+    /* Voice request modal */
+    .wa-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #25d366;
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .wa-link:hover { color: #20b358; }
+
+    @media (max-width: 900px) {
+      .app-columns {
+        grid-template-columns: 1fr;
+      }
+      .voice-panel {
+        order: 2;
+      }
+      .stream-panel {
+        order: 1;
+      }
+      .stream-area {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .app-content { padding: 12px; }
+      .mode-selector { flex-direction: column; }
+      .mode-btn { min-width: unset; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <a href="index.html" class="app-logo">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+      <div class="coin-chip" id="coinChip" onclick="openBuyCoins()">
+        🪙 <span id="coinBalance">—</span> coins
+      </div>
+      <span class="mode-badge badge-purple" id="modeBadge">Video Only</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-primary btn-sm" onclick="openBuyCoins()">Buy Coins</button>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main class="app-main">
+    <div class="app-content">
+
+      <!-- Mode selector -->
+      <div class="mode-selector" id="modeSelector">
+        <button class="mode-btn active" id="modeVideoBtn" onclick="setMode('video')">
+          <span class="mode-icon">🎥</span>
+          <span class="mode-info">
+            <span class="mode-name">Video Only</span>
+            <span class="mode-rate-text">2 coins/sec</span>
+          </span>
+        </button>
+        <button class="mode-btn" id="modeBothBtn" onclick="setMode('both')">
+          <span class="mode-icon">✨</span>
+          <span class="mode-info">
+            <span class="mode-name">Video + Voice</span>
+            <span class="mode-rate-text">2.5 coins/sec</span>
+          </span>
+        </button>
+        <button class="mode-btn" id="modeAudioBtn" onclick="setMode('audio')">
+          <span class="mode-icon">🎙</span>
+          <span class="mode-info">
+            <span class="mode-name">Voice Only</span>
+            <span class="mode-rate-text">0.5 coins/sec</span>
+          </span>
+        </button>
+      </div>
+
+      <div class="app-columns">
+        <!-- Voice panel -->
+        <div class="voice-panel" id="voicePanel">
+          <div class="panel-header">Select Voice</div>
+          <div class="voices-list" id="voicesList">
+            <div class="voice-empty">
+              <div style="font-size:28px;margin-bottom:8px;">🎙</div>
+              Loading voices...
+            </div>
+          </div>
+          <div style="padding: 12px; border-top: 1px solid var(--border);">
+            <button class="btn btn-ghost btn-sm w-full" onclick="openRequestVoice()">+ Request Custom Voice</button>
+          </div>
+        </div>
+
+        <!-- Stream panel -->
+        <div class="stream-panel">
+          <!-- Video stream area -->
+          <div class="stream-area" id="videoStreamArea">
+            <div class="video-box" id="inputVideoBox">
+              <div class="video-placeholder" id="inputPlaceholder">
+                <span class="placeholder-icon">📷</span>
+                <span>Camera Input</span>
+              </div>
+              <video id="inputVideo" autoplay muted playsinline style="display:none;"></video>
+              <span class="video-label">Input</span>
+            </div>
+            <div class="video-box" id="outputVideoBox">
+              <div class="video-placeholder" id="outputPlaceholder">
+                <span class="placeholder-icon">✨</span>
+                <span>AI Output</span>
+              </div>
+              <canvas id="outputCanvas" style="display:none; width:100%; height:100%; object-fit:cover;"></canvas>
+              <span class="video-label">AI Output</span>
+            </div>
+          </div>
+
+          <!-- Audio-only display -->
+          <div class="audio-display" id="audioDisplay">
+            <div class="audio-meters">
+              <div class="audio-meter">
+                <div class="meter-icon">🎤</div>
+                <div class="level-bar">
+                  <div class="level-fill" id="micLevel"></div>
+                </div>
+                <div class="meter-label">Microphone</div>
+              </div>
+              <div class="audio-arrow">→</div>
+              <div class="audio-meter">
+                <div class="meter-icon">🔊</div>
+                <div class="level-bar">
+                  <div class="level-fill output" id="spkLevel"></div>
+                </div>
+                <div class="meter-label">Voice Output</div>
+              </div>
+            </div>
+            <p style="text-align:center; color:var(--text2); font-size:13px; margin-top:20px;" id="voiceStatusText">
+              Select a voice and press Start
+            </p>
+          </div>
+
+          <!-- Controls -->
+          <div class="controls-panel">
+            <!-- Audio delay (voice/both modes) -->
+            <div class="control-group" id="delayControl" style="display:none;">
+              <label class="control-label" id="delayLabel">Voice Delay: 0ms (sync with video)</label>
+              <input type="range" id="delaySlider" min="0" max="500" value="0" step="10">
+            </div>
+
+            <!-- Prompt (video modes) -->
+            <div class="control-group" id="promptControl">
+              <label class="control-label">AI Prompt</label>
+              <input type="text" class="form-input prompt-input" id="promptInput"
+                placeholder="Describe the look (e.g. cyberpunk warrior)" value="anime character, vibrant">
+            </div>
+
+            <!-- Enhance toggle (video modes) -->
+            <div class="control-group" id="enhanceControl" style="min-width:120px; flex:0;">
+              <label class="control-label">Enhance</label>
+              <label class="toggle-wrap">
+                <span class="toggle">
+                  <input type="checkbox" id="enhanceToggle" checked>
+                  <span class="toggle-slider"></span>
+                </span>
+                <span style="font-size:13px;">On</span>
+              </label>
+            </div>
+
+            <!-- Apply button (video modes) -->
+            <div class="control-group" id="applyControl" style="flex:0; min-width:unset;">
+              <label class="control-label" style="visibility:hidden;">.</label>
+              <button class="btn btn-secondary btn-sm" onclick="applyVideoSettings()">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom bar -->
+  <div class="bottom-bar">
+    <div class="status-section">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">IDLE</span>
+      <div class="billing-counter" id="billingCounter">
+        ⏱ <span id="billingSecs">0</span>s
+      </div>
+    </div>
+    <div class="stream-controls">
+      <button class="btn btn-success" id="startBtn" onclick="startStream()">▶ Start</button>
+      <button class="btn btn-danger" id="stopBtn" onclick="stopStream()" disabled>■ Stop</button>
+    </div>
+  </div>
+
+  <!-- Buy Coins Modal -->
+  <div class="modal-overlay hidden" id="buyCoinsModal">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <span class="modal-title">Buy Coins</span>
+        <button class="modal-close" onclick="closeBuyCoins()">✕</button>
+      </div>
+
+      <!-- Packages -->
+      <div class="coin-pkg-grid" id="pkgGrid"></div>
+
+      <div style="margin-bottom: 16px; padding: 12px; background: var(--bg3); border-radius: 8px; font-size: 13px; color: var(--text2);">
+        Selected: <strong id="selectedPkgLabel" style="color:var(--text)">None</strong>
+        — <span id="selectedPkgPrice" style="color:var(--accent2)"></span>
+      </div>
+
+      <!-- Network tabs -->
+      <div class="network-tabs">
+        <button class="network-tab active" onclick="switchNetworkTab('trc20', this)">TRC20</button>
+        <button class="network-tab" onclick="switchNetworkTab('erc20', this)">ERC20</button>
+        <button class="network-tab" onclick="switchNetworkTab('btc', this)">BTC</button>
+        <button class="network-tab" onclick="switchNetworkTab('bank', this)">Bank</button>
+      </div>
+
+      <div class="network-pane active" id="ntrc20">
+        <div class="form-group">
+          <label class="form-label">TRC20 USDT Address</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" class="form-input" id="buyAddrTrc20" readonly>
+            <button class="copy-btn" onclick="copyField('buyAddrTrc20')" style="flex-shrink:0; padding:10px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer; font-family:inherit; transition:all 0.2s;">Copy</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Transaction Hash</label>
+          <input type="text" class="form-input" id="buyHashTrc20" placeholder="Paste TxID after payment">
+        </div>
+        <button class="btn btn-primary w-full" onclick="submitTopup('trc20')">Submit Payment</button>
+      </div>
+
+      <div class="network-pane" id="nerc20">
+        <div class="form-group">
+          <label class="form-label">ERC20 USDT Address</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" class="form-input" id="buyAddrErc20" readonly>
+            <button class="copy-btn" onclick="copyField('buyAddrErc20')" style="flex-shrink:0; padding:10px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer; font-family:inherit; transition:all 0.2s;">Copy</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Transaction Hash</label>
+          <input type="text" class="form-input" id="buyHashErc20" placeholder="Paste TxID after payment">
+        </div>
+        <button class="btn btn-primary w-full" onclick="submitTopup('erc20')">Submit Payment</button>
+      </div>
+
+      <div class="network-pane" id="nbtc">
+        <div class="form-group">
+          <label class="form-label">Bitcoin Address</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" class="form-input" id="buyAddrBtc" readonly>
+            <button class="copy-btn" onclick="copyField('buyAddrBtc')" style="flex-shrink:0; padding:10px 14px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; cursor:pointer; font-family:inherit; transition:all 0.2s;">Copy</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Transaction Hash</label>
+          <input type="text" class="form-input" id="buyHashBtc" placeholder="Paste TxID after payment">
+        </div>
+        <button class="btn btn-primary w-full" onclick="submitTopup('btc')">Submit Payment</button>
+      </div>
+
+      <div class="network-pane" id="nbank">
+        <div id="bankInfoDisplay" style="margin-bottom:12px;font-size:13px;color:var(--text2);">Loading bank details...</div>
+        <div class="form-group">
+          <label class="form-label">Your Name</label>
+          <input type="text" class="form-input" id="buyBankName" placeholder="Your full name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Transfer Reference</label>
+          <input type="text" class="form-input" id="buyBankRef" placeholder="e.g. VNV Pro coins">
+        </div>
+        <button class="btn btn-primary w-full" onclick="submitBankTopup()">Submit Bank Transfer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice Request Modal -->
+  <div class="modal-overlay hidden" id="voiceRequestModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Request Custom Voice</span>
+        <button class="modal-close" onclick="closeRequestVoice()">✕</button>
+      </div>
+      <p style="font-size:13px; color:var(--text2); margin-bottom:16px;">
+        Request a custom voice model. Our team will review, set a price, and notify you once it's ready.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Voice / Character Name</label>
+        <input type="text" class="form-input" id="reqVoiceName" placeholder="e.g. Morgan Freeman, Darth Vader">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-input" id="reqDescription" placeholder="Describe the voice characteristics, tone, accent..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Additional Notes (optional)</label>
+        <textarea class="form-input" id="reqNotes" placeholder="Any specific requirements..." style="min-height:60px;"></textarea>
+      </div>
+      <div style="background: rgba(37,211,102,0.08); border: 1px solid rgba(37,211,102,0.2); border-radius:8px; padding:12px; margin-bottom:16px; font-size:13px;">
+        <strong style="color:#25d366;">Send audio sample:</strong>
+        <br>
+        <a href="https://wa.me/18024402677?text=Hi, I want to submit a voice sample for a custom voice request on VNV Pro" target="_blank" class="wa-link" style="margin-top:6px; display:inline-flex;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+          Send 15-20 second audio sample via WhatsApp
+        </a>
+      </div>
+      <button class="btn btn-primary w-full" onclick="submitVoiceRequest()">Submit Request</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

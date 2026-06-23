@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign Up — VNV Pro</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: var(--bg);
+    }
+
+    .signup-wrap {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .signup-logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .signup-logo a {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .signup-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px;
+      box-shadow: var(--shadow);
+    }
+
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 28px;
+    }
+
+    .step-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg3);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text2);
+      flex-shrink: 0;
+      transition: all 0.3s;
+    }
+
+    .step-dot.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .step-dot.done {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: var(--border);
+      transition: background 0.3s;
+    }
+
+    .step-line.done { background: var(--green); }
+
+    .step-label {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 4px;
+      text-align: center;
+    }
+
+    .step-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .steps-row {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .error-box {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--red);
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .info-box {
+      background: rgba(124,58,237,0.1);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: var(--accent2);
+      margin-bottom: 16px;
+    }
+
+    .success-box {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      color: var(--green);
+      margin-bottom: 16px;
+      text-align: center;
+    }
+
+    .payment-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg3);
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 16px;
+    }
+
+    .payment-tab {
+      flex: 1;
+      padding: 8px 6px;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .payment-tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .payment-pane { display: none; }
+    .payment-pane.active { display: block; }
+
+    .copy-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .copy-row input {
+      flex: 1;
+    }
+
+    .copy-btn {
+      flex-shrink: 0;
+      padding: 10px 14px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent2);
+    }
+
+    .signup-footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: var(--text2);
+    }
+
+    .access-code-display {
+      text-align: center;
+      padding: 24px;
+    }
+
+    .access-code-display .code {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent2);
+      letter-spacing: 4px;
+      font-family: monospace;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 20px;
+      margin: 12px 0;
+      display: inline-block;
+    }
+
+    .bank-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+
+    .bank-detail-row:last-child { border-bottom: none; }
+    .bank-detail-row .label { color: var(--text2); font-size: 12px; }
+    .bank-detail-row .value { font-weight: 600; }
+  </style>
+</head>
+<body>
+
+  <div class="signup-wrap">
+    <div class="signup-logo">
+      <a href="index.html">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+    </div>
+
+    <div class="signup-card">
+      <!-- Step indicator -->
+      <div class="step-indicator">
+        <div class="steps-row">
+          <div class="step-wrap">
+            <div class="step-dot active" id="dot1">1</div>
+          </div>
+          <div class="step-line" id="line1"></div>
+          <div class="step-wrap">
+            <div class="step-dot" id="dot2">2</div>
+          </div>
+          <div class="step-line" id="line2"></div>
+          <div class="step-wrap">
+            <div class="step-dot" id="dot3">3</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="error-box" id="errorBox"></div>
+
+      <!-- Step 1: Account details -->
+      <div id="step1">
+        <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 6px;">Create Account</h1>
+        <p style="color: var(--text2); font-size: 14px; margin-bottom: 24px;">Enter your details to get started.</p>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Email address</label>
+          <input type="email" id="email" class="form-input" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input type="password" id="password" class="form-input" placeholder="Min 6 characters" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="confirmPassword">Confirm Password</label>
+          <input type="password" id="confirmPassword" class="form-input" placeholder="Repeat password" required>
+        </div>
+
+        <button class="btn btn-primary w-full" id="step1Btn" onclick="goToStep2()">
+          Continue to Payment
+        </button>
+      </div>
+
+      <!-- Step 2: Payment -->
+      <div id="step2" style="display: none;">
+        <h1 style="font-size: 22px; font-weight: 700; margin-bottom: 6px;">Complete Payment</h1>
+        <p style="color: var(--text2); font-size: 14px; margin-bottom: 16px;">
+          Pay the signup fee to activate your account and receive 500 free coins.
+        </p>
+
+        <div class="info-box" id="feeInfo">
+          Loading fee info...
+        </div>
+
+        <!-- Payment method tabs -->
+        <div class="payment-tabs">
+          <button class="payment-tab active" onclick="switchPayTab('trc20', this)">TRC20 USDT</button>
+          <button class="payment-tab" onclick="switchPayTab('erc20', this)">ERC20 USDT</button>
+          <button class="payment-tab" onclick="switchPayTab('btc', this)">Bitcoin</button>
+          <button class="payment-tab" onclick="switchPayTab('bank', this)">Bank Transfer</button>
+        </div>
+
+        <!-- TRC20 -->
+        <div class="payment-pane active" id="pane-trc20">
+          <div class="form-group">
+            <label class="form-label">TRC20 USDT Wallet Address</label>
+            <div class="copy-row">
+              <input type="text" class="form-input" id="addr-trc20" readonly>
+              <button class="copy-btn" onclick="copyAddr('addr-trc20')">Copy</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Your Transaction Hash (after payment)</label>
+            <input type="text" class="form-input" id="hash-trc20" placeholder="Paste TxID here">
+          </div>
+          <button class="btn btn-primary w-full" onclick="submitCrypto('trc20')">Submit Payment</button>
+        </div>
+
+        <!-- ERC20 -->
+        <div class="payment-pane" id="pane-erc20">
+          <div class="form-group">
+            <label class="form-label">ERC20 USDT Wallet Address</label>
+            <div class="copy-row">
+              <input type="text" class="form-input" id="addr-erc20" readonly>
+              <button class="copy-btn" onclick="copyAddr('addr-erc20')">Copy</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Your Transaction Hash (after payment)</label>
+            <input type="text" class="form-input" id="hash-erc20" placeholder="Paste TxID here">
+          </div>
+          <button class="btn btn-primary w-full" onclick="submitCrypto('erc20')">Submit Payment</button>
+        </div>
+
+        <!-- BTC -->
+        <div class="payment-pane" id="pane-btc">
+          <div class="form-group">
+            <label class="form-label">Bitcoin Wallet Address</label>
+            <div class="copy-row">
+              <input type="text" class="form-input" id="addr-btc" readonly>
+              <button class="copy-btn" onclick="copyAddr('addr-btc')">Copy</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Your Transaction Hash (after payment)</label>
+            <input type="text" class="form-input" id="hash-btc" placeholder="Paste TxID here">
+          </div>
+          <button class="btn btn-primary w-full" onclick="submitCrypto('btc')">Submit Payment</button>
+        </div>
+
+        <!-- Bank Transfer -->
+        <div class="payment-pane" id="pane-bank">
+          <div id="bankDetails" style="margin-bottom: 16px;"></div>
+          <div class="form-group">
+            <label class="form-label">Sender Name</label>
+            <input type="text" class="form-input" id="senderName" placeholder="Your full name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Transfer Reference / Description used</label>
+            <input type="text" class="form-input" id="transferRef" placeholder="e.g. VNV Pro signup">
+          </div>
+          <p style="font-size: 12px; color: var(--text2); margin-bottom: 12px;">
+            After transfer, submit your info. Our team will verify and approve within a few hours.
+          </p>
+          <button class="btn btn-primary w-full" onclick="submitBank()">Submit Bank Transfer</button>
+        </div>
+
+        <div style="text-align: center; margin-top: 16px;">
+          <button class="btn btn-ghost btn-sm" onclick="goBack()">← Back</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Success -->
+      <div id="step3" style="display: none;">
+        <div class="access-code-display">
+          <div style="font-size: 40px; margin-bottom: 12px;">🎉</div>
+          <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Account Submitted!</h2>
+          <p style="color: var(--text2); font-size: 14px; margin-bottom: 20px;" id="step3Msg">
+            Your payment is being verified. Once approved, you'll receive your access code below.
+          </p>
+          <div id="accessCodeSection" style="display: none;">
+            <p style="font-size: 13px; color: var(--text2); margin-bottom: 8px;">Your Access Code:</p>
+            <div class="code" id="accessCodeDisplay"></div>
+            <p style="font-size: 12px; color: var(--text2); margin-top: 8px;">Save this code! It's your account recovery key.</p>
+          </div>
+          <a href="login.html" class="btn btn-primary" style="margin-top: 20px;">Go to Login</a>
+        </div>
+      </div>
+
+      <div class="signup-footer" id="signupFooter">
+        Already have an account? <a href="login.html">Login here</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    let signupEmail = '';
+    let signupPassword = '';
+    let feeUsd = 5;
+    let wallets = {};
+    let bankDetails = {};
+
+    // Toast
+    function showToast(msg, type = 'info') {
+      const toast = document.getElementById('toast');
+      const el = document.createElement('div');
+      el.className = `toast-item toast-${type}`;
+      el.textContent = msg;
+      toast.appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('errorBox').style.display = 'none';
+    }
+
+    function setStep(n) {
+      document.getElementById('step1').style.display = n === 1 ? 'block' : 'none';
+      document.getElementById('step2').style.display = n === 2 ? 'block' : 'none';
+      document.getElementById('step3').style.display = n === 3 ? 'block' : 'none';
+      if (n === 3) document.getElementById('signupFooter').style.display = 'none';
+
+      for (let i = 1; i <= 3; i++) {
+        const dot = document.getElementById('dot' + i);
+        dot.className = 'step-dot';
+        if (i < n) dot.classList.add('done'), dot.textContent = '✓';
+        else if (i === n) dot.classList.add('active'), dot.textContent = i;
+        else dot.textContent = i;
+      }
+      if (document.getElementById('line1')) {
+        document.getElementById('line1').className = 'step-line' + (n > 1 ? ' done' : '');
+        document.getElementById('line2').className = 'step-line' + (n > 2 ? ' done' : '');
+      }
+    }
+
+    function switchPayTab(tab, btn) {
+      document.querySelectorAll('.payment-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.payment-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('pane-' + tab).classList.add('active');
+    }
+
+    function copyAddr(id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.value).then(() => {
+        showToast('Address copied!', 'success');
+      }).catch(() => {
+        el.select();
+        document.execCommand('copy');
+        showToast('Address copied!', 'success');
+      });
+    }
+
+    async function loadFeeAndWallets() {
+      try {
+        const [feeRes, walletRes, bankRes] = await Promise.all([
+          fetch('/api/signup?action=get_fee'),
+          fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_wallets' }) }),
+          fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_bank_public' }) })
+        ]);
+
+        const feeData = await feeRes.json();
+        feeUsd = feeData.fee || 5;
+        document.getElementById('feeInfo').innerHTML = `
+          Signup fee: <strong>$${feeUsd} USD</strong> — paid once to activate your account.
+          You'll receive <strong>500 free coins</strong> on activation.
+        `;
+
+        const walletData = await walletRes.json();
+        wallets = walletData.wallets || {};
+        document.getElementById('addr-trc20').value = wallets.trc20 || 'Address not set';
+        document.getElementById('addr-erc20').value = wallets.erc20 || 'Address not set';
+        document.getElementById('addr-btc').value = wallets.btc || 'Address not set';
+
+        const bankData = await bankRes.json();
+        bankDetails = bankData.bank || {};
+        const bd = document.getElementById('bankDetails');
+        if (bankDetails.bankName) {
+          bd.innerHTML = `
+            <div class="bank-detail-row"><span class="label">Bank Name</span><span class="value">${bankDetails.bankName}</span></div>
+            <div class="bank-detail-row"><span class="label">Account Name</span><span class="value">${bankDetails.accountName}</span></div>
+            <div class="bank-detail-row"><span class="label">Account Number</span><span class="value">${bankDetails.accountNumber}</span></div>
+            ${bankDetails.sortCode ? `<div class="bank-detail-row"><span class="label">Sort Code</span><span class="value">${bankDetails.sortCode}</span></div>` : ''}
+            ${bankDetails.routing ? `<div class="bank-detail-row"><span class="label">Routing</span><span class="value">${bankDetails.routing}</span></div>` : ''}
+            ${bankDetails.note ? `<div class="bank-detail-row"><span class="label">Note</span><span class="value">${bankDetails.note}</span></div>` : ''}
+          `;
+        } else {
+          bd.innerHTML = '<p style="color: var(--text2); font-size: 13px;">Bank details not configured. Please use crypto payment.</p>';
+        }
+      } catch (err) {
+        document.getElementById('feeInfo').textContent = 'Could not load payment info. Please refresh.';
+      }
+    }
+
+    async function goToStep2() {
+      hideError();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const confirm = document.getElementById('confirmPassword').value;
+
+      if (!email || !password || !confirm) {
+        showError('Please fill in all fields.');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        showError('Please enter a valid email address.');
+        return;
+      }
+      if (password.length < 6) {
+        showError('Password must be at least 6 characters.');
+        return;
+      }
+      if (password !== confirm) {
+        showError('Passwords do not match.');
+        return;
+      }
+
+      const btn = document.getElementById('step1Btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Checking...';
+
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'check_email', email })
+        });
+        const data = await res.json();
+        if (!res.ok || data.exists) {
+          showError(data.error || 'Email already registered.');
+          btn.disabled = false;
+          btn.textContent = 'Continue to Payment';
+          return;
+        }
+
+        signupEmail = email;
+        signupPassword = password;
+
+        // Create pending signup
+        const pendRes = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_pending', email, password })
+        });
+        const pendData = await pendRes.json();
+        if (!pendRes.ok) {
+          showError(pendData.error || 'Failed to create pending signup.');
+          btn.disabled = false;
+          btn.textContent = 'Continue to Payment';
+          return;
+        }
+
+        setStep(2);
+        loadFeeAndWallets();
+      } catch (err) {
+        showError('Network error. Please try again.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Continue to Payment';
+      }
+    }
+
+    function goBack() {
+      hideError();
+      setStep(1);
+    }
+
+    async function submitCrypto(network) {
+      hideError();
+      const hashInput = document.getElementById('hash-' + network);
+      const hash = hashInput.value.trim();
+      if (!hash) {
+        showError('Please paste your transaction hash.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'verify_crypto', email: signupEmail, txHash: hash, network })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          showSuccessStep(data);
+        } else {
+          showError(data.error || 'Payment verification failed.');
+        }
+      } catch (err) {
+        showError('Network error. Please try again.');
+      }
+    }
+
+    async function submitBank() {
+      hideError();
+      const senderName = document.getElementById('senderName').value.trim();
+      const transferRef = document.getElementById('transferRef').value.trim();
+      if (!senderName || !transferRef) {
+        showError('Please fill in your name and transfer reference.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create_pending', email: signupEmail, password: signupPassword, paymentMethod: 'bank', senderName, transferRef })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('step3Msg').textContent = 'Your bank transfer has been submitted. Our team will verify and approve within a few hours.';
+          setStep(3);
+        } else {
+          showError(data.error || 'Submission failed.');
+        }
+      } catch (err) {
+        showError('Network error. Please try again.');
+      }
+    }
+
+    function showSuccessStep(data) {
+      if (data.accessCode) {
+        document.getElementById('step3Msg').textContent = 'Your account has been created successfully!';
+        document.getElementById('accessCodeSection').style.display = 'block';
+        document.getElementById('accessCodeDisplay').textContent = data.accessCode;
+      } else {
+        document.getElementById('step3Msg').textContent = 'Payment submitted! Our team will review and approve your account shortly.';
+      }
+      setStep(3);
+    }
+  </script>
+</body>
+</html>

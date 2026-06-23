@@ -1,0 +1,221 @@
+import Redis from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL);
+
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '09130370801Maviegr8@';
+const USERS_KEY = 'vnv_users';
+const PENDING_KEY = 'vnv_signup_pending';
+const FEE_KEY = 'vnv_signup_fee';
+const DEFAULT_FEE = 5;
+const SIGNUP_COINS = 500;
+
+function coinKey(email) {
+  return `vnv_coins:${email}`;
+}
+
+function genAccessCode() {
+  const part = () => Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `VNV-${part()}-${part()}`;
+}
+
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // GET /api/signup?action=get_fee
+  if (req.method === 'GET') {
+    const action = req.query?.action;
+    if (action === 'get_fee') {
+      const raw = await redis.get(FEE_KEY);
+      return res.status(200).json({ fee: raw ? parseFloat(raw) : DEFAULT_FEE });
+    }
+    return res.status(400).json({ error: 'Unknown GET action' });
+  }
+
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const body = req.body || {};
+  const { action, password } = body;
+
+  if (!action) return res.status(400).json({ error: 'Missing action' });
+
+  const isAdmin = password === ADMIN_PASSWORD;
+
+  try {
+
+    // ── get_fee ────────────────────────────────────────────────────────────────
+    if (action === 'get_fee') {
+      const raw = await redis.get(FEE_KEY);
+      return res.status(200).json({ fee: raw ? parseFloat(raw) : DEFAULT_FEE });
+    }
+
+    // ── set_fee (admin) ────────────────────────────────────────────────────────
+    if (action === 'set_fee') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { fee } = body;
+      if (isNaN(parseFloat(fee))) return res.status(400).json({ error: 'Invalid fee' });
+      await redis.set(FEE_KEY, fee.toString());
+      return res.status(200).json({ ok: true, fee: parseFloat(fee) });
+    }
+
+    // ── check_email ────────────────────────────────────────────────────────────
+    if (action === 'check_email') {
+      const { email } = body;
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+        return res.status(200).json({ exists: true });
+      }
+
+      // Check pending
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      if (pending.find(p => p.email.toLowerCase() === email.toLowerCase())) {
+        return res.status(200).json({ exists: true });
+      }
+
+      return res.status(200).json({ exists: false });
+    }
+
+    // ── create_pending ─────────────────────────────────────────────────────────
+    if (action === 'create_pending') {
+      const { email, password: userPw, paymentMethod, senderName, transferRef } = body;
+      if (!email || !userPw) return res.status(400).json({ error: 'Missing email or password' });
+
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+        return res.status(400).json({ error: 'Email already registered' });
+      }
+
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+
+      // Update or add
+      const existingIdx = pending.findIndex(p => p.email.toLowerCase() === email.toLowerCase());
+      const record = {
+        email,
+        password: userPw,
+        paymentMethod: paymentMethod || 'crypto',
+        senderName: senderName || '',
+        transferRef: transferRef || '',
+        status: 'pending',
+        createdAt: Date.now()
+      };
+
+      if (existingIdx !== -1) {
+        pending[existingIdx] = { ...pending[existingIdx], ...record };
+      } else {
+        pending.push(record);
+      }
+
+      await redis.set(PENDING_KEY, JSON.stringify(pending));
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── verify_crypto ──────────────────────────────────────────────────────────
+    if (action === 'verify_crypto') {
+      const { email, txHash, network } = body;
+      if (!email || !txHash) return res.status(400).json({ error: 'Missing email or txHash' });
+
+      // Check hash not already used
+      const usedKey = `vnv_tx_used:${txHash}`;
+      const used = await redis.get(usedKey);
+      if (used) return res.status(400).json({ error: 'Transaction hash already used' });
+
+      // Find pending record
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      const idx = pending.findIndex(p => p.email.toLowerCase() === email.toLowerCase());
+      if (idx === -1) return res.status(404).json({ error: 'No pending signup for this email' });
+
+      // Store hash and submit for admin approval
+      pending[idx].txHash = txHash;
+      pending[idx].network = network || 'crypto';
+      pending[idx].paymentMethod = 'crypto';
+      await redis.set(PENDING_KEY, JSON.stringify(pending));
+
+      return res.status(200).json({ ok: true, message: 'Payment submitted for verification' });
+    }
+
+    // ── get_pending (admin) ────────────────────────────────────────────────────
+    if (action === 'get_pending') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      const filtered = pending
+        .filter(p => p.status === 'pending')
+        .map(p => ({ ...p, password: undefined }));
+      return res.status(200).json({ pending: filtered });
+    }
+
+    // ── approve (admin) ────────────────────────────────────────────────────────
+    if (action === 'approve') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { targetEmail } = body;
+      if (!targetEmail) return res.status(400).json({ error: 'Missing targetEmail' });
+
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      const idx = pending.findIndex(p => p.email.toLowerCase() === targetEmail.toLowerCase());
+      if (idx === -1) return res.status(404).json({ error: 'Pending signup not found' });
+
+      const record = pending[idx];
+
+      // Add to users
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      if (users.find(u => u.email.toLowerCase() === targetEmail.toLowerCase())) {
+        return res.status(400).json({ error: 'User already exists' });
+      }
+
+      // Mark tx hash used
+      if (record.txHash) {
+        await redis.set(`vnv_tx_used:${record.txHash}`, '1', 'EX', 60 * 60 * 24 * 365);
+      }
+
+      const accessCode = genAccessCode();
+      users.push({
+        email: record.email,
+        password: record.password,
+        accessCode,
+        active: true,
+        createdAt: Date.now()
+      });
+
+      await redis.set(USERS_KEY, JSON.stringify(users));
+      await redis.set(coinKey(record.email), SIGNUP_COINS.toString());
+
+      // Mark pending as approved
+      pending[idx].status = 'approved';
+      pending[idx].approvedAt = Date.now();
+      await redis.set(PENDING_KEY, JSON.stringify(pending));
+
+      return res.status(200).json({ ok: true, accessCode });
+    }
+
+    // ── reject (admin) ─────────────────────────────────────────────────────────
+    if (action === 'reject') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { targetEmail } = body;
+      if (!targetEmail) return res.status(400).json({ error: 'Missing targetEmail' });
+
+      const pendingRaw = await redis.get(PENDING_KEY);
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      const filtered = pending.filter(p => p.email.toLowerCase() !== targetEmail.toLowerCase());
+      await redis.set(PENDING_KEY, JSON.stringify(filtered));
+
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(400).json({ error: 'Unknown action' });
+
+  } catch (err) {
+    console.error('[signup]', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
