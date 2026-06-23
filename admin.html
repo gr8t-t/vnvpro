@@ -389,7 +389,13 @@
           <div class="setting-row">
             <div><div class="setting-label">Signup Fee (USD)</div><div class="setting-sub">One-time fee to activate account</div></div>
             <div class="setting-input">
-              <input type="number" class="form-input" id="signupFeeInput" step="1" min="0">
+              <input type="number" class="form-input" id="signupFeeInput" step="1" min="0" placeholder="USD">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Signup Fee (Naira)</div><div class="setting-sub">Same fee shown in Naira</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="signupFeeNairaInput" step="100" min="0" placeholder="NGN">
               <button class="btn btn-secondary btn-sm" onclick="saveSignupFee()">Save</button>
             </div>
           </div>
@@ -1053,6 +1059,7 @@
 
       // Signup fee
       document.getElementById('signupFeeInput').value = feeData.fee || 5;
+      document.getElementById('signupFeeNairaInput').value = feeData.feeNaira || 8000;
 
       // RVC URL
       document.getElementById('rvcUrlInput').value = rvcData.url || '';
@@ -1119,10 +1126,11 @@
 
     async function saveSignupFee() {
       const fee = parseFloat(document.getElementById('signupFeeInput').value);
+      const feeNaira = parseFloat(document.getElementById('signupFeeNairaInput').value);
       const res = await fetch('/api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'set_fee', fee, password: adminPw })
+        body: JSON.stringify({ action: 'set_fee', fee, feeNaira, password: adminPw })
       });
       const data = await res.json();
       if (data.ok) showToast('Signup fee saved.', 'success');

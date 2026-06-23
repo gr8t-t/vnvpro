@@ -6,8 +6,21 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '09130370801Maviegr8@';
 const USERS_KEY = 'vnv_users';
 const PENDING_KEY = 'vnv_signup_pending';
 const FEE_KEY = 'vnv_signup_fee';
+const FEE_NAIRA_KEY = 'vnv_signup_fee_naira';
 const DEFAULT_FEE = 5;
+const DEFAULT_FEE_NAIRA = 8000;
 const SIGNUP_COINS = 500;
+
+async function readFees() {
+  const [usdRaw, ngnRaw] = await Promise.all([
+    redis.get(FEE_KEY),
+    redis.get(FEE_NAIRA_KEY),
+  ]);
+  return {
+    fee: usdRaw ? parseFloat(usdRaw) : DEFAULT_FEE,
+    feeNaira: ngnRaw ? parseFloat(ngnRaw) : DEFAULT_FEE_NAIRA,
+  };
+}
 
 function coinKey(email) {
   return `vnv_coins:${email}`;
@@ -28,8 +41,7 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     const action = req.query?.action;
     if (action === 'get_fee') {
-      const raw = await redis.get(FEE_KEY);
-      return res.status(200).json({ fee: raw ? parseFloat(raw) : DEFAULT_FEE });
+      return res.status(200).json(await readFees());
     }
     return res.status(400).json({ error: 'Unknown GET action' });
   }
@@ -47,17 +59,16 @@ export default async function handler(req, res) {
 
     // ── get_fee ────────────────────────────────────────────────────────────────
     if (action === 'get_fee') {
-      const raw = await redis.get(FEE_KEY);
-      return res.status(200).json({ fee: raw ? parseFloat(raw) : DEFAULT_FEE });
+      return res.status(200).json(await readFees());
     }
 
     // ── set_fee (admin) ────────────────────────────────────────────────────────
     if (action === 'set_fee') {
       if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
-      const { fee } = body;
-      if (isNaN(parseFloat(fee))) return res.status(400).json({ error: 'Invalid fee' });
-      await redis.set(FEE_KEY, fee.toString());
-      return res.status(200).json({ ok: true, fee: parseFloat(fee) });
+      const { fee, feeNaira } = body;
+      if (fee !== undefined && !isNaN(parseFloat(fee)))      await redis.set(FEE_KEY, parseFloat(fee).toString());
+      if (feeNaira !== undefined && !isNaN(parseFloat(feeNaira))) await redis.set(FEE_NAIRA_KEY, parseFloat(feeNaira).toString());
+      return res.status(200).json({ ok: true, ...(await readFees()) });
     }
 
     // ── check_email ────────────────────────────────────────────────────────────

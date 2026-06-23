@@ -420,6 +420,7 @@
     let signupEmail = '';
     let signupPassword = '';
     let feeUsd = 5;
+    let feeNaira = 8000;
     let wallets = {};
     let bankDetails = {};
 
@@ -490,8 +491,9 @@
 
         const feeData = await feeRes.json();
         feeUsd = feeData.fee || 5;
+        feeNaira = feeData.feeNaira || 8000;
         document.getElementById('feeInfo').innerHTML = `
-          Signup fee: <strong>$${feeUsd} USD</strong> — paid once to activate your account.
+          Signup fee: <strong>$${feeUsd} USD</strong> / <strong>₦${feeNaira.toLocaleString()}</strong> — paid once to activate your account.
           You'll receive <strong>500 free coins</strong> on activation.
         `;
 
