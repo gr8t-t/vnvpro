@@ -45,10 +45,10 @@ OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
 
 # Real-time tuning (seconds) — Voice 1.0 (Standard)
-BLOCK_SEC      = 0.75           # audio gathered before each conversion (lower = less delay)
+BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
 CONTEXT_SEC    = 0.25           # past audio prepended for pitch context (smaller = less word clipping)
-CROSSFADE_SEC  = 0.12           # overlap blended between consecutive outputs (bigger = smoother joins)
-SILENCE_RMS    = 0.003          # gate only true silence; 0.003 lets quiet speech through cleanly
+CROSSFADE_SEC  = 0.10           # overlap blended between consecutive outputs (bigger = smoother)
+SILENCE_RMS    = 0.004          # only TRUE silence is gated, so quiet words aren't dropped
 
 # Voice 2.0 (Premium) — windowed overlap-add: emits the artifact-free CENTRE of each
 # inference, with context on BOTH sides, so chunk-edge breakage is avoided.

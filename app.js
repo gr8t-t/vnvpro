@@ -1058,18 +1058,18 @@ async function startAudioPipeline(voice) {
   analyser.fftSize = 256;
   source.connect(analyser);
 
-  // AudioWorklet runs on a dedicated real-time thread — no dropped audio frames
-  await audioCtx.audioWorklet.addModule('audio-processor.js');
-  processor = new AudioWorkletNode(audioCtx, 'audio-capture');
-  processor.port.onmessage = (e) => {
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+
+  processor.onaudioprocess = (e) => {
     if (!rvcWs || rvcWs.readyState !== WebSocket.OPEN) return;
-    const float32 = e.data;
+    const float32 = e.inputBuffer.getChannelData(0);
     const int16 = new Int16Array(float32.length);
     for (let i = 0; i < float32.length; i++) {
       int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32767));
     }
     rvcWs.send(int16.buffer);
   };
+
   source.connect(processor);
   processor.connect(audioCtx.destination);
 
@@ -1098,12 +1098,15 @@ async function startAudioPipeline(voice) {
       src.buffer = buffer;
       src.connect(playbackCtx.destination);
 
-      // Gapless scheduling — schedule each chunk strictly AFTER the previous one.
-      // Only ever resync FORWARD (on an underrun/gap); never move a start time
-      // backwards, which would overlap already-queued audio and echo/repeat words.
+      // Gapless scheduling: queue each chunk right after the previous one.
       const now = playbackCtx.currentTime;
-      const minStart = now + 0.02;
-      const startAt = nextPlayTime > minStart ? nextPlayTime : minStart;
+      let startAt = Math.max(now, nextPlayTime);
+
+      // Drift guard: if the queue has crept too far ahead of real time, the voice
+      // would lag further and further behind. Resync to catch up (small skip).
+      const MAX_LEAD = 0.6; // seconds of allowed buffer
+      if (startAt - now > MAX_LEAD) startAt = now;
+
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
     } catch (_) {}
