@@ -660,8 +660,9 @@
             <button type="button" id="engineV1Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v1')">Voice 1.0</button>
             <button type="button" id="engineV2Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v2')">Voice 2.0 ✦</button>
           </div>
-          <div id="engineHint" style="padding:8px 12px; font-size:11px; color:var(--text2); border-bottom:1px solid var(--border);">
-            Standard — available anytime.
+          <div id="engineHint" style="padding:8px 12px; font-size:11px; color:var(--text2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <span id="engineHintText">Standard — powered by our server. Always available.</span>
+            <button id="v2GuideBtn" class="btn btn-ghost btn-sm" style="display:none; font-size:10px; white-space:nowrap; padding:3px 9px;" onclick="openV2Guide()">Setup Guide</button>
           </div>
           <div class="panel-header">Select Voice</div>
           <div class="voices-list" id="voicesList">
@@ -983,34 +984,72 @@
     </div>
   </div>
 
-  <!-- Voice 2.0 Waitlist Modal -->
-  <div class="modal-overlay hidden" id="waitlistModal">
-    <div class="modal">
+  <!-- Voice 2.0 Setup Guide Modal -->
+  <div class="modal-overlay hidden" id="v2GuideModal">
+    <div class="modal" style="max-width:480px;">
       <div class="modal-header">
-        <span class="modal-title">Voice 2.0 ✦ Premium</span>
-        <button class="modal-close" onclick="leaveWaitlist()">✕</button>
+        <span class="modal-title">Voice 2.0 ✦ Setup Guide</span>
+        <button class="modal-close" onclick="closeV2Guide()">✕</button>
       </div>
-      <div id="waitBusy">
-        <p style="font-size:14px; color:var(--text2); margin-bottom:16px;">
-          Voice 2.0 is currently in use by another user. You can wait in line, or use Voice 1.0 right now.
+      <div style="padding:4px 16px 16px;">
+        <p style="font-size:13px; color:var(--text2); margin-bottom:18px; line-height:1.6;">
+          Voice 2.0 uses <strong style="color:var(--text);">w-okada</strong> — a free app that runs AI voice conversion directly on <em>your</em> GPU with ultra-low latency. One-time setup, then it's one click each time.
         </p>
-        <div style="background:var(--bg3); border-radius:10px; padding:16px; text-align:center; margin-bottom:16px;">
-          <div id="waitPosition" style="font-size:15px; color:var(--text);">Joining the line…</div>
+
+        <!-- Step 1 -->
+        <div style="display:flex; gap:12px; margin-bottom:16px;">
+          <div style="min-width:28px; height:28px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0;">1</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px;">Download w-okada Voice Changer</div>
+            <div style="font-size:12px; color:var(--text2); margin-bottom:8px; line-height:1.5;">Free, open-source. Click the link, find the latest Windows release (.zip), download and extract it.</div>
+            <a href="https://github.com/w-okada/voice-changer/releases" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size:11px;">github.com/w-okada — Releases</a>
+          </div>
         </div>
-        <div style="background:rgba(124,58,237,0.08); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--text2); margin-bottom:16px;">
-          <strong style="color:var(--text);">What's the difference?</strong><br>
-          Voice 2.0 is our premium engine — smoother, more natural, with less breakage. Voice 1.0 is still great and is free to use anytime.
+
+        <!-- Step 2 -->
+        <div style="display:flex; gap:12px; margin-bottom:16px;">
+          <div style="min-width:28px; height:28px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0;">2</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px;">Download VB-Cable (free virtual mic driver)</div>
+            <div style="font-size:12px; color:var(--text2); margin-bottom:8px; line-height:1.5;">This creates a virtual microphone on your PC so your converted voice goes to your calls — not your raw voice.</div>
+            <a href="https://vb-audio.com/Cable/" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size:11px;">vb-audio.com/Cable</a>
+          </div>
         </div>
-        <button class="btn btn-secondary w-full" onclick="switchToV1FromWait()" style="margin-bottom:8px;">Use Voice 1.0 instead</button>
-        <button class="btn btn-ghost btn-sm w-full" onclick="leaveWaitlist()">Leave the line</button>
-      </div>
-      <div id="waitTurn" style="display:none; text-align:center;">
-        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
-        <h3 style="color:var(--green); margin-bottom:8px;">It's your turn!</h3>
-        <p style="font-size:13px; color:var(--text2); margin-bottom:8px;">
-          Start within <strong id="waitTurnSecs">300</strong> seconds or your spot passes to the next person.
-        </p>
-        <button class="btn btn-primary w-full" onclick="startFromTurn()">Start Voice 2.0 Now</button>
+
+        <!-- Step 3 -->
+        <div style="display:flex; gap:12px; margin-bottom:16px;">
+          <div style="min-width:28px; height:28px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0;">3</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px;">Configure w-okada</div>
+            <div style="font-size:12px; color:var(--text2); line-height:1.6;">
+              Open w-okada, then set:<br>
+              <span style="color:var(--text);">Input →</span> Your real microphone<br>
+              <span style="color:var(--text);">Output →</span> <strong>CABLE Input (VB-Audio Virtual Cable)</strong><br>
+              Load a voice model and press <strong>Start</strong>.
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div style="display:flex; gap:12px; margin-bottom:18px;">
+          <div style="min-width:28px; height:28px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0;">4</div>
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--text); margin-bottom:4px;">Select VB-Cable as your microphone</div>
+            <div style="font-size:12px; color:var(--text2); line-height:1.6;">
+              In your browser (or Discord / Zoom / OBS),<br>
+              pick <strong style="color:var(--text);">"CABLE Output (VB-Audio Virtual Cable)"</strong> as the microphone.<br>
+              Everyone will now hear your w-okada converted voice!
+            </div>
+          </div>
+        </div>
+
+        <!-- GPU note -->
+        <div style="background:rgba(255,170,0,0.08); border:1px solid rgba(255,170,0,0.3); border-radius:8px; padding:12px; font-size:12px; color:var(--text2); margin-bottom:16px; line-height:1.6;">
+          <strong style="color:#ffaa00;">GPU Required:</strong> Voice 2.0 needs a dedicated graphics card for real-time AI processing. Works best with NVIDIA GTX 1060 / AMD RX 580 or better. Integrated graphics won't work.
+        </div>
+
+        <button class="btn btn-primary w-full" onclick="closeV2Guide()">Got it — I'm all set!</button>
+        <button class="btn btn-ghost btn-sm w-full" style="margin-top:8px;" onclick="setEngine('v1'); closeV2Guide();">Use Voice 1.0 instead (no download needed)</button>
       </div>
     </div>
   </div>
