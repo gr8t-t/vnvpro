@@ -152,6 +152,11 @@
       align-items: start;
     }
 
+    /* Video-only mode: voice panel hidden, stream panel fills full width */
+    .app-columns.single-col {
+      grid-template-columns: 1fr;
+    }
+
     /* Voice panel */
     .voice-panel {
       background: var(--bg2);

@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupVideoControls();
 
+  // Apply the default mode layout (Video Only) on load
+  setMode('video');
+
   // Full-screen pop-out of the AI output in a new tab
   const popoutBtn = document.getElementById('popoutBtn');
   if (popoutBtn) {
@@ -601,6 +604,7 @@ function setMode(m) {
   const presetControl = document.getElementById('presetControl');
   const referenceControl = document.getElementById('referenceControl');
   const voicePanel = document.getElementById('voicePanel');
+  const appColumns = document.querySelector('.app-columns');
 
   const videoControls = (show) => {
     const v = show ? '' : 'none';
@@ -617,18 +621,21 @@ function setMode(m) {
     delayControl.style.display = 'block';
     videoControls(false);
     voicePanel.style.display = '';
+    appColumns.classList.remove('single-col');
   } else if (m === 'both') {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
     delayControl.style.display = 'block';
     videoControls(true);
     voicePanel.style.display = '';
+    appColumns.classList.remove('single-col');
   } else {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
     delayControl.style.display = 'none';
     videoControls(true);
     voicePanel.style.display = 'none';
+    appColumns.classList.add('single-col');
   }
 }
 
