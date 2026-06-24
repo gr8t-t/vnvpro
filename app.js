@@ -46,6 +46,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   currentEmail = session.email;
 
+  // Show the access-code lock screen if this user hasn't acknowledged it yet
+  await checkAccessCode();
+
   // Fire logged-in event
   document.dispatchEvent(new CustomEvent('vnv:logged-in', { detail: { email: currentEmail } }));
 
@@ -86,6 +89,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 });
+
+// ─── ACCESS CODE LOCK SCREEN ───────────────────────────────────────────────────
+async function checkAccessCode() {
+  let data;
+  try {
+    const res = await fetch('/api/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_access_code', email: currentEmail })
+    });
+    data = await res.json();
+  } catch (_) { return; }
+  if (!data || !data.code) return;  // already acknowledged or none
+
+  const overlay     = document.getElementById('codeOverlay');
+  const copyBtn     = document.getElementById('codeCopyBtn');
+  const continueBtn = document.getElementById('codeContinueBtn');
+  document.getElementById('codeValue').textContent = data.code;
+  overlay.style.display = 'flex';
+
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(data.code).then(
+      () => { copyBtn.textContent = '✓ Copied'; setTimeout(() => copyBtn.textContent = 'Copy Code', 1800); },
+      () => { copyBtn.textContent = 'Copy failed'; }
+    );
+  };
+
+  // Block here until the user clicks Continue (which acknowledges in the DB)
+  await new Promise(resolve => {
+    continueBtn.onclick = async () => {
+      continueBtn.disabled = true;
+      continueBtn.textContent = 'Saving…';
+      try {
+        await fetch('/api/signup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'ack_code', email: currentEmail })
+        });
+      } catch (_) {}
+      overlay.style.display = 'none';
+      resolve();
+    };
+  });
+}
 
 // ─── VIDEO CONTROLS: presets + reference image ─────────────────────────────────
 function setupVideoControls() {

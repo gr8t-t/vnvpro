@@ -194,6 +194,7 @@ export default async function handler(req, res) {
         email: record.email,
         password: record.password,
         accessCode,
+        codeAck: false,        // user must view & acknowledge their code on next login
         active: true,
         createdAt: Date.now()
       });
@@ -220,6 +221,35 @@ export default async function handler(req, res) {
       const filtered = pending.filter(p => p.email.toLowerCase() !== targetEmail.toLowerCase());
       await redis.set(PENDING_KEY, JSON.stringify(filtered));
 
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── get_access_code (logged-in user) ────────────────────────────────────────
+    // Returns the access code ONLY if it has not yet been acknowledged.
+    // Legacy users (codeAck undefined) are treated as already acknowledged.
+    if (action === 'get_access_code') {
+      const { email } = body;
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (user && user.codeAck === false && user.accessCode) {
+        return res.status(200).json({ code: user.accessCode });
+      }
+      return res.status(200).json({ code: null });
+    }
+
+    // ── ack_code (logged-in user) ────────────────────────────────────────────────
+    // Marks the access code as acknowledged so the lock screen never shows again.
+    if (action === 'ack_code') {
+      const { email } = body;
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      const idx = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
+      if (idx === -1) return res.status(404).json({ error: 'User not found' });
+      users[idx].codeAck = true;
+      await redis.set(USERS_KEY, JSON.stringify(users));
       return res.status(200).json({ ok: true });
     }
 

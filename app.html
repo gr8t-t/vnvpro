@@ -572,6 +572,20 @@
 </head>
 <body>
 
+  <!-- Access code lock screen (shows after first payment approval, until acknowledged) -->
+  <div id="codeOverlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(8,8,15,0.97); align-items:center; justify-content:center; padding:20px;">
+    <div style="max-width:440px; width:100%; background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:32px 28px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <div style="font-size:40px; margin-bottom:10px;">🔑</div>
+      <h2 style="font-size:20px; margin-bottom:8px; color:var(--text);">Your Access Code</h2>
+      <p style="color:var(--text2); font-size:14px; margin-bottom:20px;">
+        Save this code somewhere safe. You'll need it to recover your account. This screen stays until you copy it and continue.
+      </p>
+      <div id="codeValue" style="font-family:monospace; font-size:24px; font-weight:700; letter-spacing:2px; color:var(--accent2); background:var(--bg3); border:1px dashed var(--accent); border-radius:10px; padding:16px; margin-bottom:18px; user-select:all;">VNV-XXXX-XXXX</div>
+      <button id="codeCopyBtn" class="btn btn-secondary w-full" style="margin-bottom:10px;">Copy Code</button>
+      <button id="codeContinueBtn" class="btn btn-primary w-full">I've Saved It — Continue</button>
+    </div>
+  </div>
+
   <!-- Header -->
   <header class="app-header">
     <div class="header-left">
