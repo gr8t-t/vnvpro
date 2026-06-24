@@ -584,7 +584,7 @@ async function applyVideoSettings(initial) {
   if (prompt) payload.prompt = prompt;
   if (referenceFile && !settingsApplied) {
     payload.image = referenceFile;
-    if (!prompt) payload.prompt = 'Transform my face and body to look exactly like the person in the reference image. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
+    if (!prompt) payload.prompt = 'Transform my face and body to look exactly like the person in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
   }
   try {
     await realtimeClient.set(payload);
