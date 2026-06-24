@@ -44,9 +44,10 @@ OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
 
 # Real-time tuning (seconds)
-BLOCK_SEC      = 0.80           # audio gathered before each conversion
-CONTEXT_SEC    = 0.25           # past audio prepended for pitch context
-CROSSFADE_SEC  = 0.06           # overlap blended between consecutive outputs
+BLOCK_SEC      = 1.30           # audio gathered before each conversion (bigger = clearer words)
+CONTEXT_SEC    = 0.35           # past audio prepended for pitch context
+CROSSFADE_SEC  = 0.08           # overlap blended between consecutive outputs
+SILENCE_RMS    = 0.012          # blocks quieter than this are treated as silence (skip noise)
 
 app = FastAPI(title="VNV Pro RVC Server")
 app.add_middleware(
@@ -83,7 +84,8 @@ def get_model(folder):
         t0 = time.time()
         rvc = RVCInference(device=DEVICE)
         rvc.load_model(pth, index_path=idx)
-        rvc.set_params(f0method="rmvpe", f0up_key=0, index_rate=0.75, protect=0.33)
+        # index_rate kept moderate: too high adds warble/artifacts on short blocks
+        rvc.set_params(f0method="rmvpe", f0up_key=0, index_rate=0.5, protect=0.40)
         # Warm up so the first real request is fast
         try:
             warm = np.zeros(INPUT_SR, dtype=np.float32)  # 1s of silence
@@ -211,6 +213,16 @@ async def voice_ws(websocket: WebSocket, voice_folder: str):
             while len(in_buf) >= block_n:
                 block  = in_buf[:block_n]
                 in_buf = in_buf[block_n:]
+
+                # Silence gate: don't run the model on near-silent blocks (avoids
+                # turning background hiss into warbly artifacts). Emit matching silence.
+                rms = float(np.sqrt(np.mean(block * block))) if len(block) else 0.0
+                if rms < SILENCE_RMS:
+                    context = block[-context_n:] if context_n else np.zeros(0, dtype=np.float32)
+                    prev_tail = np.zeros(0, dtype=np.float32)
+                    sil = np.zeros(int(len(block) * OUTPUT_SR / INPUT_SR), dtype=np.int16)
+                    await websocket.send_bytes(sil.tobytes())
+                    continue
 
                 # prepend context so pitch detection has history
                 window = np.concatenate([context, block]) if len(context) else block
