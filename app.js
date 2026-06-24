@@ -1171,9 +1171,28 @@ async function submitBankTopup() {
 }
 
 // ─── VOICE REQUEST ─────────────────────────────────────────────────────────────
-function openRequestVoice(e) {
+let voicePrice = { price: 0, priceNaira: 0 };
+
+async function openRequestVoice(e) {
   if (e) e.stopPropagation();
+  // Reset to the form view
+  document.getElementById('reqFormSection').style.display = '';
+  document.getElementById('reqPaySection').style.display = 'none';
+  document.getElementById('reqPriceText').textContent = '…';
   document.getElementById('voiceRequestModal').classList.remove('hidden');
+
+  // Fetch and show the fixed price
+  try {
+    const res = await fetch('/api/voices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_voice_price' })
+    });
+    voicePrice = await res.json();
+    document.getElementById('reqPriceText').textContent =
+      `$${voicePrice.price} / ₦${Number(voicePrice.priceNaira).toLocaleString()}`;
+  } catch (_) {
+    document.getElementById('reqPriceText').textContent = 'unavailable';
+  }
 }
 
 function closeRequestVoice() {
@@ -1190,6 +1209,9 @@ async function submitVoiceRequest() {
     return;
   }
 
+  const btn = document.getElementById('reqSubmitBtn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
   try {
     const res = await fetch('/api/voices', {
       method: 'POST',
@@ -1198,8 +1220,28 @@ async function submitVoiceRequest() {
     });
     const data = await res.json();
     if (res.ok && data.ok) {
-      showToast('Request submitted! Send your 15-20 second audio sample to our WhatsApp support.', 'success');
-      closeRequestVoice();
+      const usd = data.price ?? voicePrice.price;
+      const ngn = data.priceNaira ?? voicePrice.priceNaira;
+      document.getElementById('reqPayAmount').textContent = `$${usd} / ₦${Number(ngn).toLocaleString()}`;
+
+      // Build payment instructions from the configured wallets + bank details
+      let html = '';
+      if (bankInfo && bankInfo.bankName) {
+        html += `<div style="margin-bottom:10px;"><strong style="color:var(--text);">Bank Transfer</strong><br>
+          Bank: <strong>${escHtml(bankInfo.bankName)}</strong><br>
+          Name: <strong>${escHtml(bankInfo.accountName || '')}</strong><br>
+          Account: <strong>${escHtml(bankInfo.accountNumber || '')}</strong></div>`;
+      }
+      const w = wallets || {};
+      if (w.trc20) html += `<div style="margin-bottom:6px;word-break:break-all;"><strong style="color:var(--text);">USDT (TRC20):</strong><br>${escHtml(w.trc20)}</div>`;
+      if (w.erc20) html += `<div style="margin-bottom:6px;word-break:break-all;"><strong style="color:var(--text);">USDT (ERC20):</strong><br>${escHtml(w.erc20)}</div>`;
+      if (w.btc)   html += `<div style="margin-bottom:6px;word-break:break-all;"><strong style="color:var(--text);">Bitcoin:</strong><br>${escHtml(w.btc)}</div>`;
+      if (!html) html = 'Payment details not configured. Please contact support on WhatsApp.';
+      document.getElementById('reqPayDetails').innerHTML = html;
+
+      // Switch to payment view
+      document.getElementById('reqFormSection').style.display = 'none';
+      document.getElementById('reqPaySection').style.display = 'block';
       document.getElementById('reqVoiceName').value = '';
       document.getElementById('reqDescription').value = '';
       document.getElementById('reqNotes').value = '';
@@ -1209,6 +1251,7 @@ async function submitVoiceRequest() {
   } catch (_) {
     showToast('Network error. Please try again.', 'error');
   }
+  btn.disabled = false; btn.textContent = 'Submit & Pay';
 }
 
 // ─── UTILS ─────────────────────────────────────────────────────────────────────

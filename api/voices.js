@@ -7,6 +7,21 @@ const VOICES_KEY = 'vnv_voices';
 const REQUESTS_KEY = 'vnv_voice_requests';
 const USER_VOICES_KEY = 'vnv_user_voices';
 const USERS_KEY = 'vnv_users';
+const VOICE_PRICE_KEY = 'vnv_voice_price';          // fixed custom-voice price (USD)
+const VOICE_PRICE_NAIRA_KEY = 'vnv_voice_price_naira';
+const DEFAULT_VOICE_PRICE = 20;
+const DEFAULT_VOICE_PRICE_NAIRA = 32000;
+
+async function readVoicePrice() {
+  const [usd, ngn] = await Promise.all([
+    redis.get(VOICE_PRICE_KEY),
+    redis.get(VOICE_PRICE_NAIRA_KEY),
+  ]);
+  return {
+    price: usd ? parseFloat(usd) : DEFAULT_VOICE_PRICE,
+    priceNaira: ngn ? parseFloat(ngn) : DEFAULT_VOICE_PRICE_NAIRA,
+  };
+}
 
 function genId(prefix) {
   return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -154,6 +169,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ voiceIds: map[email] || [] });
     }
 
+    // ── get_voice_price (public) ─────────────────────────────────────────────────
+    if (action === 'get_voice_price') {
+      return res.status(200).json(await readVoicePrice());
+    }
+
+    // ── set_voice_price (admin) ───────────────────────────────────────────────────
+    if (action === 'set_voice_price') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { price, priceNaira } = body;
+      if (price !== undefined && !isNaN(parseFloat(price))) await redis.set(VOICE_PRICE_KEY, parseFloat(price).toString());
+      if (priceNaira !== undefined && !isNaN(parseFloat(priceNaira))) await redis.set(VOICE_PRICE_NAIRA_KEY, parseFloat(priceNaira).toString());
+      return res.status(200).json({ ok: true, ...(await readVoicePrice()) });
+    }
+
     // ── request_voice (user) ───────────────────────────────────────────────────
     if (action === 'request_voice') {
       if (!email) return res.status(400).json({ error: 'Missing email' });
@@ -166,6 +195,9 @@ export default async function handler(req, res) {
       const user = users.find(u => u.email === email);
       if (!user || !user.active) return res.status(403).json({ error: 'Account not found or inactive' });
 
+      // Attach the current fixed price so the user pays a known amount up front
+      const { price, priceNaira } = await readVoicePrice();
+
       const requests = await getRequests();
       const reqId = genId('vreq');
       requests.push({
@@ -175,14 +207,15 @@ export default async function handler(req, res) {
         description,
         notes: notes || '',
         status: 'pending',
-        price: null,
+        price,
+        priceNaira,
         createdAt: Date.now(),
         approvedAt: null,
         paidAt: null
       });
 
       await setRequests(requests);
-      return res.status(200).json({ ok: true, id: reqId });
+      return res.status(200).json({ ok: true, id: reqId, price, priceNaira });
     }
 
     // ── get_requests (admin) ───────────────────────────────────────────────────

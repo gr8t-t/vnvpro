@@ -401,6 +401,23 @@
           </div>
         </div>
 
+        <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Custom Voice Request Price</h3>
+          <div class="setting-row">
+            <div><div class="setting-label">Price (USD)</div><div class="setting-sub">Fixed price users pay to request a custom voice</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="voicePriceInput" step="1" min="0" placeholder="USD">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Price (Naira)</div><div class="setting-sub">Same price shown in Naira</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="voicePriceNairaInput" step="100" min="0" placeholder="NGN">
+              <button class="btn btn-secondary btn-sm" onclick="saveVoicePrice()">Save</button>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">RVC Server URL</h3>
           <div class="form-group">
@@ -1012,13 +1029,14 @@
 
     // ─── SETTINGS ─────────────────────────────────────────────────────────────────
     async function loadSettings() {
-      const [ratesData, pkgData, walletData, bankData, feeData, rvcData] = await Promise.all([
+      const [ratesData, pkgData, walletData, bankData, feeData, rvcData, voicePriceData] = await Promise.all([
         coinsApi({ action: 'get_rates' }),
         coinsApi({ action: 'get_packages' }),
         api({ action: 'get_wallets' }),
         api({ action: 'get_bank' }),
         fetch('/api/signup?action=get_fee').then(r => r.json()),
-        api({ action: 'get_rvc_url' })
+        api({ action: 'get_rvc_url' }),
+        voicesApi({ action: 'get_voice_price' })
       ]);
 
       // Rates
@@ -1063,6 +1081,18 @@
 
       // RVC URL
       document.getElementById('rvcUrlInput').value = rvcData.url || '';
+
+      // Custom voice price
+      document.getElementById('voicePriceInput').value = voicePriceData.price ?? 20;
+      document.getElementById('voicePriceNairaInput').value = voicePriceData.priceNaira ?? 32000;
+    }
+
+    async function saveVoicePrice() {
+      const price = parseFloat(document.getElementById('voicePriceInput').value);
+      const priceNaira = parseFloat(document.getElementById('voicePriceNairaInput').value);
+      const data = await voicesApi({ action: 'set_voice_price', price, priceNaira, password: adminPw });
+      if (data.ok) showToast('Custom voice price saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
     }
 
     async function saveRate(type) {
