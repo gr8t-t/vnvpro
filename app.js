@@ -662,7 +662,7 @@ async function startStream() {
     return;
   }
 
-  if ((mode === 'audio' || mode === 'both') && !rvcServerUrl) {
+  if ((mode === 'audio' || mode === 'both') && engine === 'v1' && !rvcServerUrl) {
     showToast('RVC server URL not configured. Contact support.', 'error');
     return;
   }
