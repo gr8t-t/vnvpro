@@ -24,6 +24,7 @@ except Exception:
 import os
 import io
 import time
+import asyncio
 import json
 import wave
 import tempfile
@@ -199,59 +200,73 @@ async def voice_ws(websocket: WebSocket, voice_folder: str):
     block_n     = int(BLOCK_SEC * INPUT_SR)
     context_n   = int(CONTEXT_SEC * INPUT_SR)
     xfade_out_n = int(CROSSFADE_SEC * OUTPUT_SR)
+    min_flush_n = int(0.20 * INPUT_SR)          # process leftovers >=0.2s on pause/stop
+    FLUSH_IDLE  = 0.25                          # seconds of no audio before flushing tail
 
-    in_buf    = np.zeros(0, dtype=np.float32)   # pending input (16k)
-    context   = np.zeros(0, dtype=np.float32)   # trailing input context (16k)
-    prev_tail = np.zeros(0, dtype=np.float32)   # previous output tail for crossfade (48k)
+    state = {
+        "context":   np.zeros(0, dtype=np.float32),  # trailing input context (16k)
+        "prev_tail": np.zeros(0, dtype=np.float32),  # previous output tail for crossfade (48k)
+    }
+    in_buf = np.zeros(0, dtype=np.float32)           # pending input (16k)
+
+    async def process_block(block, is_flush=False):
+        # Silence gate: skip the model on near-silent blocks (no hiss conversion)
+        rms = float(np.sqrt(np.mean(block * block))) if len(block) else 0.0
+        if rms < SILENCE_RMS:
+            state["context"] = block[-context_n:] if context_n else np.zeros(0, dtype=np.float32)
+            state["prev_tail"] = np.zeros(0, dtype=np.float32)
+            sil = np.zeros(int(len(block) * OUTPUT_SR / INPUT_SR), dtype=np.int16)
+            await websocket.send_bytes(sil.tobytes())
+            return
+
+        context = state["context"]
+        window  = np.concatenate([context, block]) if len(context) else block
+        ctx_len = len(context)
+
+        out, _ = _infer_array(rvc, window, INPUT_SR)
+
+        # drop the output region that corresponds to the prepended context
+        if ctx_len:
+            drop = int(len(out) * ctx_len / len(window))
+            out = out[drop:]
+
+        # crossfade with the previous block's tail to avoid clicks
+        prev_tail = state["prev_tail"]
+        if len(prev_tail) and len(out) > xfade_out_n:
+            fade = min(xfade_out_n, len(prev_tail), len(out))
+            ramp = np.linspace(0, 1, fade, dtype=np.float32)
+            out[:fade] = out[:fade] * ramp + prev_tail[:fade] * (1 - ramp)
+
+        # On a flush (end of utterance) send the whole tail so the last word completes
+        if not is_flush and len(out) > xfade_out_n:
+            state["prev_tail"] = out[-xfade_out_n:].copy()
+            send = out[:-xfade_out_n]
+        else:
+            state["prev_tail"] = np.zeros(0, dtype=np.float32)
+            send = out
+
+        state["context"] = block[-context_n:] if context_n else np.zeros(0, dtype=np.float32)
+        pcm = np.clip(send * 32767.0, -32768, 32767).astype(np.int16)
+        await websocket.send_bytes(pcm.tobytes())
 
     try:
         while True:
-            data = await websocket.receive_bytes()
+            try:
+                data = await asyncio.wait_for(websocket.receive_bytes(), timeout=FLUSH_IDLE)
+            except asyncio.TimeoutError:
+                # paused/stopped talking — flush whatever is left so words finish
+                if len(in_buf) >= min_flush_n:
+                    await process_block(in_buf, is_flush=True)
+                    in_buf = np.zeros(0, dtype=np.float32)
+                continue
+
             chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32767.0
             in_buf = np.concatenate([in_buf, chunk])
 
             while len(in_buf) >= block_n:
                 block  = in_buf[:block_n]
                 in_buf = in_buf[block_n:]
-
-                # Silence gate: don't run the model on near-silent blocks (avoids
-                # turning background hiss into warbly artifacts). Emit matching silence.
-                rms = float(np.sqrt(np.mean(block * block))) if len(block) else 0.0
-                if rms < SILENCE_RMS:
-                    context = block[-context_n:] if context_n else np.zeros(0, dtype=np.float32)
-                    prev_tail = np.zeros(0, dtype=np.float32)
-                    sil = np.zeros(int(len(block) * OUTPUT_SR / INPUT_SR), dtype=np.int16)
-                    await websocket.send_bytes(sil.tobytes())
-                    continue
-
-                # prepend context so pitch detection has history
-                window = np.concatenate([context, block]) if len(context) else block
-                ctx_len = len(context)
-
-                out, out_sr = _infer_array(rvc, window, INPUT_SR)
-
-                # drop the part of the output that corresponds to the context region
-                if ctx_len:
-                    drop = int(len(out) * ctx_len / len(window))
-                    out = out[drop:]
-
-                # crossfade with the previous block's tail to avoid clicks
-                if len(prev_tail) and len(out) > xfade_out_n:
-                    fade = min(xfade_out_n, len(prev_tail), len(out))
-                    ramp = np.linspace(0, 1, fade, dtype=np.float32)
-                    out[:fade] = out[:fade] * ramp + prev_tail[:fade] * (1 - ramp)
-
-                if len(out) > xfade_out_n:
-                    prev_tail = out[-xfade_out_n:].copy()
-                    send = out[:-xfade_out_n]
-                else:
-                    send = out
-
-                # update context window (keep last context_n input samples)
-                context = block[-context_n:] if context_n else np.zeros(0, dtype=np.float32)
-
-                pcm = np.clip(send * 32767.0, -32768, 32767).astype(np.int16)
-                await websocket.send_bytes(pcm.tobytes())
+                await process_block(block)
 
     except WebSocketDisconnect:
         print(f"[RVC] WS disconnected -> {voice_folder}")
