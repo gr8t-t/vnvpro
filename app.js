@@ -2,9 +2,13 @@
 
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let mode = 'video';
+let engine = 'v1';                 // 'v1' (Standard) | 'v2' (Premium)
 let selectedVoice = null;
 let audioDelay = 0;
 let rvcWs = null;
+let v2HeartbeatInterval = null;    // holds the Voice 2.0 slot while streaming
+let v1HeartbeatInterval = null;    // counts this user as an active Voice 1.0 stream
+let waitPollInterval = null;       // polls waitlist status
 let rvcServerUrl = null;
 let audioCtx = null;
 let playbackCtx = null;
@@ -82,6 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Apply the default mode layout (Video Only) on load
   setMode('video');
+  setEngine('v1');
 
   // Full-screen pop-out of the AI output in a new tab
   const popoutBtn = document.getElementById('popoutBtn');
@@ -660,6 +665,20 @@ async function startStream() {
     return;
   }
 
+  // Voice-engine gating (only for voice modes)
+  if (mode === 'audio' || mode === 'both') {
+    if (engine === 'v2') {
+      const got = await acquireVoice2();
+      if (!got) return;            // shown the waitlist; don't start
+    } else {
+      const allowed = await checkV1Cap();
+      if (!allowed) {
+        showToast('High demand right now — please wait a moment and try again, or try Voice 2.0.', 'error', 5000);
+        return;
+      }
+    }
+  }
+
   setStatus('Connecting...', false);
   document.getElementById('startBtn').disabled = true;
 
@@ -682,15 +701,26 @@ async function startStream() {
     setStatus('LIVE', true);
     lastBilledSeconds = 0;
     audioBillingSeconds = 0;
+
+    // Keep the Voice 2.0 slot held, or count this as an active Voice 1.0 stream
+    if (mode === 'audio' || mode === 'both') startEngineHeartbeat();
   } catch (err) {
     setStatus('IDLE', false);
     document.getElementById('startBtn').disabled = false;
+    // release any slot we grabbed before the failure
+    if (mode === 'audio' || mode === 'both') {
+      voice2Api('v2_release').catch(() => {});
+      voice2Api('v1_stop').catch(() => {});
+    }
     showToast('Failed to start: ' + (err.message || err), 'error');
   }
 }
 
 function stopStream() {
   isStreaming = false;
+
+  // Release the voice engine slot / stop the active-stream count
+  stopEngineHeartbeat();
 
   // Stop audio billing
   if (audioBillingInterval) {
@@ -817,7 +847,7 @@ async function startVideoStream() {
     document.getElementById('billingCounter').style.display = 'block';
     const elapsed = Math.max(1, seconds - lastBilledSeconds);
     lastBilledSeconds = seconds;
-    await drainCoins(elapsed, mode === 'both' ? 'both' : 'video');
+    await drainCoins(elapsed, billMode());
   });
 
   realtimeClient.on('error', (err) => {
@@ -875,8 +905,9 @@ async function applyVideoSettings(initial) {
 
 // ─── AUDIO PIPELINE ────────────────────────────────────────────────────────────
 async function startAudioPipeline(voice) {
-  // Connect WebSocket
-  const wsUrl = rvcServerUrl.replace(/^http/, 'ws') + '/ws/' + voice.folderName;
+  // Connect WebSocket — Voice 2.0 uses the premium /ws2 endpoint
+  const path = engine === 'v2' ? '/ws2/' : '/ws/';
+  const wsUrl = rvcServerUrl.replace(/^http/, 'ws') + path + voice.folderName;
   rvcWs = new WebSocket(wsUrl);
 
   await new Promise((resolve, reject) => {
@@ -992,11 +1023,18 @@ function startAudioBilling() {
     audioBillingSeconds += 30;
     document.getElementById('billingSecs').textContent = audioBillingSeconds;
     document.getElementById('billingCounter').style.display = 'block';
-    await drainCoins(30, 'audio');
+    await drainCoins(30, billMode());
   }, 30000);
 }
 
 // ─── DRAIN COINS ───────────────────────────────────────────────────────────────
+// Billing mode reflects both the stream mode and the chosen engine (v2 costs more)
+function billMode() {
+  if (mode === 'video') return 'video';
+  if (mode === 'both')  return engine === 'v2' ? 'both2' : 'both';
+  return engine === 'v2' ? 'audio2' : 'audio';   // audio-only
+}
+
 async function drainCoins(seconds, modeOverride) {
   const m = modeOverride || mode;
   try {
@@ -1013,6 +1051,130 @@ async function drainCoins(seconds, modeOverride) {
       updateCoinDisplay(data.balance);
     }
   } catch (_) {}
+}
+
+// ─── VOICE ENGINE (1.0 vs 2.0, slot + waitlist) ────────────────────────────────
+function setEngine(e) {
+  if (isStreaming) { showToast('Stop streaming before switching engines.', 'error'); return; }
+  engine = e;
+  const v1 = document.getElementById('engineV1Btn');
+  const v2 = document.getElementById('engineV2Btn');
+  const hint = document.getElementById('engineHint');
+  v1.classList.toggle('btn-primary', e === 'v1');
+  v1.classList.toggle('btn-secondary', e !== 'v1');
+  v2.classList.toggle('btn-primary', e === 'v2');
+  v2.classList.toggle('btn-secondary', e !== 'v2');
+  hint.textContent = e === 'v2'
+    ? 'Premium — smoother & more natural. One user at a time (waitlist if busy). Costs more coins.'
+    : 'Standard — available anytime.';
+}
+
+async function voice2Api(action) {
+  const res = await fetch('/api/voice2', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, email: currentEmail })
+  });
+  return res.json();
+}
+
+// Returns true if the Voice 2.0 slot is ours (start now); false if queued (waitlist shown)
+async function acquireVoice2() {
+  try {
+    const r = await voice2Api('v2_acquire');
+    if (r.ok && r.state === 'active') return true;
+    showWaitlist(r);
+    return false;
+  } catch (_) {
+    showToast('Could not reach the premium queue. Try Voice 1.0.', 'error');
+    return false;
+  }
+}
+
+async function checkV1Cap() {
+  try {
+    const r = await voice2Api('v1_can_start');
+    return !!r.allowed;
+  } catch (_) {
+    return true; // don't block on a transient error
+  }
+}
+
+function startEngineHeartbeat() {
+  stopEngineHeartbeat();
+  if (engine === 'v2') {
+    v2HeartbeatInterval = setInterval(async () => {
+      try {
+        const r = await voice2Api('v2_heartbeat');
+        if (r && r.lost) { showToast('Voice 2.0 session ended.', 'info'); stopStream(); }
+      } catch (_) {}
+    }, 10000);
+  } else {
+    voice2Api('v1_heartbeat').catch(() => {});
+    v1HeartbeatInterval = setInterval(() => { voice2Api('v1_heartbeat').catch(() => {}); }, 10000);
+  }
+}
+
+function stopEngineHeartbeat() {
+  if (v2HeartbeatInterval) { clearInterval(v2HeartbeatInterval); v2HeartbeatInterval = null; voice2Api('v2_release').catch(() => {}); }
+  if (v1HeartbeatInterval) { clearInterval(v1HeartbeatInterval); v1HeartbeatInterval = null; voice2Api('v1_stop').catch(() => {}); }
+}
+
+// ── Waitlist UI ──
+function showWaitlist(status) {
+  document.getElementById('waitBusy').style.display = 'block';
+  document.getElementById('waitTurn').style.display = 'none';
+  updateWaitText(status);
+  document.getElementById('waitlistModal').classList.remove('hidden');
+  // ensure we're in the queue, then poll
+  voice2Api('v2_join_queue').catch(() => {});
+  if (waitPollInterval) clearInterval(waitPollInterval);
+  waitPollInterval = setInterval(pollWaitStatus, 3000);
+}
+
+function updateWaitText(s) {
+  const el = document.getElementById('waitPosition');
+  if (!el) return;
+  if (s && s.state === 'queued') el.textContent = `You're #${s.position} in line` + (s.queueLen ? ` of ${s.queueLen}.` : '.');
+  else if (s && s.state === 'busy') el.textContent = 'In use right now — joining the line…';
+  else el.textContent = 'Checking your position…';
+}
+
+async function pollWaitStatus() {
+  try {
+    const s = await voice2Api('v2_status');
+    if (s.state === 'your_turn') {
+      document.getElementById('waitBusy').style.display = 'none';
+      document.getElementById('waitTurn').style.display = 'block';
+      document.getElementById('waitTurnSecs').textContent = s.secondsLeft ?? 300;
+    } else if (s.state === 'available') {
+      // slot opened and nobody ahead — claim automatically
+      clearInterval(waitPollInterval); waitPollInterval = null;
+      document.getElementById('waitlistModal').classList.add('hidden');
+      startStream();
+    } else {
+      document.getElementById('waitBusy').style.display = 'block';
+      document.getElementById('waitTurn').style.display = 'none';
+      updateWaitText(s);
+    }
+  } catch (_) {}
+}
+
+function leaveWaitlist() {
+  if (waitPollInterval) { clearInterval(waitPollInterval); waitPollInterval = null; }
+  voice2Api('v2_leave_queue').catch(() => {});
+  document.getElementById('waitlistModal').classList.add('hidden');
+}
+
+function switchToV1FromWait() {
+  leaveWaitlist();
+  setEngine('v1');
+  startStream();
+}
+
+function startFromTurn() {
+  if (waitPollInterval) { clearInterval(waitPollInterval); waitPollInterval = null; }
+  document.getElementById('waitlistModal').classList.add('hidden');
+  startStream();   // engine is still 'v2'; acquire will now succeed (it's our turn)
 }
 
 // ─── BUY COINS ─────────────────────────────────────────────────────────────────

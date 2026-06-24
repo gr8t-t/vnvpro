@@ -655,6 +655,14 @@
       <div class="app-columns">
         <!-- Voice panel -->
         <div class="voice-panel" id="voicePanel">
+          <div class="panel-header">Voice Engine</div>
+          <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
+            <button type="button" id="engineV1Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v1')">Voice 1.0</button>
+            <button type="button" id="engineV2Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v2')">Voice 2.0 ✦</button>
+          </div>
+          <div id="engineHint" style="padding:8px 12px; font-size:11px; color:var(--text2); border-bottom:1px solid var(--border);">
+            Standard — available anytime.
+          </div>
           <div class="panel-header">Select Voice</div>
           <div class="voices-list" id="voicesList">
             <div class="voice-empty">
@@ -971,6 +979,38 @@
         <audio id="recConvertedAudio" controls style="width:100%; margin-bottom:12px;"></audio>
         <button class="btn btn-primary w-full" id="recDownloadBtn" onclick="recDownload()">⬇ Download MP3</button>
         <button class="btn btn-ghost btn-sm w-full" onclick="recReset()" style="margin-top:8px;">Record Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice 2.0 Waitlist Modal -->
+  <div class="modal-overlay hidden" id="waitlistModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Voice 2.0 ✦ Premium</span>
+        <button class="modal-close" onclick="leaveWaitlist()">✕</button>
+      </div>
+      <div id="waitBusy">
+        <p style="font-size:14px; color:var(--text2); margin-bottom:16px;">
+          Voice 2.0 is currently in use by another user. You can wait in line, or use Voice 1.0 right now.
+        </p>
+        <div style="background:var(--bg3); border-radius:10px; padding:16px; text-align:center; margin-bottom:16px;">
+          <div id="waitPosition" style="font-size:15px; color:var(--text);">Joining the line…</div>
+        </div>
+        <div style="background:rgba(124,58,237,0.08); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; color:var(--text2); margin-bottom:16px;">
+          <strong style="color:var(--text);">What's the difference?</strong><br>
+          Voice 2.0 is our premium engine — smoother, more natural, with less breakage. Voice 1.0 is still great and is free to use anytime.
+        </div>
+        <button class="btn btn-secondary w-full" onclick="switchToV1FromWait()" style="margin-bottom:8px;">Use Voice 1.0 instead</button>
+        <button class="btn btn-ghost btn-sm w-full" onclick="leaveWaitlist()">Leave the line</button>
+      </div>
+      <div id="waitTurn" style="display:none; text-align:center;">
+        <div style="font-size:40px; margin-bottom:10px;">🎉</div>
+        <h3 style="color:var(--green); margin-bottom:8px;">It's your turn!</h3>
+        <p style="font-size:13px; color:var(--text2); margin-bottom:8px;">
+          Start within <strong id="waitTurnSecs">300</strong> seconds or your spot passes to the next person.
+        </p>
+        <button class="btn btn-primary w-full" onclick="startFromTurn()">Start Voice 2.0 Now</button>
       </div>
     </div>
   </div>

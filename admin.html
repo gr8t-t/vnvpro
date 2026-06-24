@@ -333,6 +333,20 @@
               <button class="btn btn-secondary btn-sm" onclick="saveRate('both')">Save</button>
             </div>
           </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Voice Only — Voice 2.0 ✦</div><div class="setting-sub">Premium audio engine, per second</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="rateAudio2" step="0.1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveRate('audio2')">Save</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Video + Voice — Voice 2.0 ✦</div><div class="setting-sub">Premium combined engine, per second</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="rateBoth2" step="0.1" min="0">
+              <button class="btn btn-secondary btn-sm" onclick="saveRate('both2')">Save</button>
+            </div>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:20px;">
@@ -1044,6 +1058,8 @@
       document.getElementById('rateVideo').value = rates.video ?? 2.0;
       document.getElementById('rateAudio').value = rates.audio ?? 0.5;
       document.getElementById('rateBoth').value = rates.both ?? 2.5;
+      document.getElementById('rateAudio2').value = rates.audio2 ?? 1.0;
+      document.getElementById('rateBoth2').value = rates.both2 ?? 3.5;
 
       // Packages
       const pkgs = pkgData.packages || [];
