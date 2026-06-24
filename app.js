@@ -7,8 +7,11 @@ let audioDelay = 0;
 let rvcWs = null;
 let rvcServerUrl = null;
 let audioCtx = null;
+let playbackCtx = null;
+let nextPlayTime = 0;
 let micStream = null;
 let processor = null;
+const RVC_OUTPUT_SR = 48000;
 let lastBilledSeconds = 0;
 let decartApiKey = null;
 let keyLoadPromise = null;
@@ -345,6 +348,11 @@ function stopStream() {
     try { audioCtx.close(); } catch (_) {}
     audioCtx = null;
   }
+  if (playbackCtx) {
+    try { playbackCtx.close(); } catch (_) {}
+    playbackCtx = null;
+  }
+  nextPlayTime = 0;
   if (micStream) {
     micStream.getTracks().forEach(t => t.stop());
     micStream = null;
@@ -499,9 +507,15 @@ async function startAudioPipeline(voice) {
 
   document.getElementById('voiceStatusText') && (document.getElementById('voiceStatusText').textContent = `Voice active: ${voice.name}`);
 
-  // Set up Web Audio
+  // Set up Web Audio — capture at 16k (what the server expects),
+  // play back through a separate 48k context (what the server returns)
   audioCtx = new AudioContext({ sampleRate: 16000 });
-  micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  playbackCtx = new AudioContext({ sampleRate: RVC_OUTPUT_SR });
+  nextPlayTime = 0;
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: true },
+    video: false
+  });
 
   const source = audioCtx.createMediaStreamSource(micStream);
 
@@ -543,16 +557,19 @@ async function startAudioPipeline(voice) {
       for (let i = 0; i < float32.length; i++) sum += float32[i] * float32[i];
       outputLevel = Math.min(100, Math.sqrt(sum / float32.length) * 300);
 
-      const capturedDelay = audioDelay;
-      setTimeout(() => {
-        if (!audioCtx || !isStreaming) return;
-        const buffer = audioCtx.createBuffer(1, float32.length, 16000);
-        buffer.getChannelData(0).set(float32);
-        const src = audioCtx.createBufferSource();
-        src.buffer = buffer;
-        src.connect(audioCtx.destination);
-        src.start();
-      }, capturedDelay);
+      if (!playbackCtx || !isStreaming) return;
+      const buffer = playbackCtx.createBuffer(1, float32.length, RVC_OUTPUT_SR);
+      buffer.getChannelData(0).set(float32);
+      const src = playbackCtx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(playbackCtx.destination);
+
+      // Gapless scheduling: queue each chunk right after the previous one.
+      // audioDelay (slider) adds an initial cushion for syncing with video.
+      const now = playbackCtx.currentTime;
+      const startAt = Math.max(now + (audioDelay / 1000), nextPlayTime);
+      src.start(startAt);
+      nextPlayTime = startAt + buffer.duration;
     } catch (_) {}
   };
 
