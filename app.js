@@ -18,6 +18,8 @@ let keyLoadPromise = null;
 let currentEmail = null;
 let coinBalance = 0;
 let realtimeClient = null;
+let referenceFile = null;
+let settingsApplied = false;
 let isStreaming = false;
 let audioBillingInterval = null;
 let audioBillingSeconds = 0;
@@ -72,7 +74,76 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('enhanceToggle').addEventListener('change', (e) => {
     e.target.parentElement.nextElementSibling.textContent = e.target.checked ? 'On' : 'Off';
   });
+
+  setupVideoControls();
 });
+
+// ─── VIDEO CONTROLS: presets + reference image ─────────────────────────────────
+function setupVideoControls() {
+  // Presets
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('promptInput').value = btn.dataset.prompt;
+    });
+  });
+
+  // Reference image upload
+  const uploadZone  = document.getElementById('uploadZone');
+  const imageUpload = document.getElementById('imageUpload');
+  if (uploadZone && imageUpload) {
+    uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.style.borderColor = 'var(--accent)'; });
+    uploadZone.addEventListener('dragleave', ()  => { uploadZone.style.borderColor = 'var(--border)'; });
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault(); uploadZone.style.borderColor = 'var(--border)';
+      if (e.dataTransfer.files[0]) handleImageFile(e.dataTransfer.files[0]);
+    });
+    imageUpload.addEventListener('change', () => { if (imageUpload.files[0]) handleImageFile(imageUpload.files[0]); });
+  }
+
+  const removeImage = document.getElementById('removeImage');
+  if (removeImage) {
+    removeImage.addEventListener('click', () => {
+      referenceFile = null;
+      document.getElementById('imagePreview').src = '';
+      document.getElementById('imagePreviewWrap').style.display = 'none';
+      uploadZone.style.display = 'block';
+      imageUpload.value = '';
+      settingsApplied = false;
+    });
+  }
+}
+
+function handleImageFile(file) {
+  if (!file.type.startsWith('image/')) { showToast('Please upload an image file.', 'error'); return; }
+  if (file.size > 10 * 1024 * 1024)   { showToast('Image too large. Max 10MB.', 'error'); return; }
+  compressImage(file, 1024).then(compressed => {
+    referenceFile = compressed;
+    document.getElementById('imagePreview').src = URL.createObjectURL(compressed);
+    document.getElementById('imagePreviewWrap').style.display = 'block';
+    document.getElementById('uploadZone').style.display = 'none';
+    settingsApplied = false;
+  });
+}
+
+function compressImage(file, maxSize = 1024) {
+  return new Promise(resolve => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      if (w > h && w > maxSize) { h = (h * maxSize) / w; w = maxSize; }
+      else if (h > maxSize)     { w = (w * maxSize) / h; h = maxSize; }
+      canvas.width = Math.round(w); canvas.height = Math.round(h);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.95);
+    };
+    img.onerror = () => resolve(file);
+    img.src = url;
+  });
+}
 
 // ─── SESSION / AUTH ────────────────────────────────────────────────────────────
 async function sendHeartbeat() {
@@ -247,31 +318,36 @@ function setMode(m) {
   const promptControl = document.getElementById('promptControl');
   const enhanceControl = document.getElementById('enhanceControl');
   const applyControl = document.getElementById('applyControl');
+  const presetControl = document.getElementById('presetControl');
+  const referenceControl = document.getElementById('referenceControl');
   const voicePanel = document.getElementById('voicePanel');
+
+  const videoControls = (show) => {
+    const v = show ? '' : 'none';
+    promptControl.style.display = v;
+    enhanceControl.style.display = v;
+    applyControl.style.display = v;
+    presetControl.style.display = v;
+    referenceControl.style.display = v;
+  };
 
   if (m === 'audio') {
     videoArea.style.display = 'none';
     audioDisplay.style.display = 'block';
     delayControl.style.display = 'block';
-    promptControl.style.display = 'none';
-    enhanceControl.style.display = 'none';
-    applyControl.style.display = 'none';
+    videoControls(false);
     voicePanel.style.display = '';
   } else if (m === 'both') {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
     delayControl.style.display = 'block';
-    promptControl.style.display = '';
-    enhanceControl.style.display = '';
-    applyControl.style.display = '';
+    videoControls(true);
     voicePanel.style.display = '';
   } else {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
     delayControl.style.display = 'none';
-    promptControl.style.display = '';
-    enhanceControl.style.display = '';
-    applyControl.style.display = '';
+    videoControls(true);
     voicePanel.style.display = 'none';
   }
 }
@@ -408,32 +484,42 @@ async function startVideoStream() {
     }
   }
 
-  const prompt = document.getElementById('promptInput').value.trim() || 'anime character';
-  const enhance = document.getElementById('enhanceToggle').checked;
+  settingsApplied = false;
 
-  // Get camera
-  const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  // Camera
+  const camStream = await navigator.mediaDevices.getUserMedia({
+    video: { frameRate: { ideal: 30, min: 24 }, width: { ideal: 1920, min: 1280 }, height: { ideal: 1080, min: 720 }, facingMode: 'user' },
+    audio: false,
+  }).catch(err => {
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') throw new Error('Camera access denied. Please allow camera permissions.');
+    if (err.name === 'NotFoundError') throw new Error('No camera found. Please connect a webcam.');
+    throw err;
+  });
+
   const inputVideo = document.getElementById('inputVideo');
   inputVideo.srcObject = camStream;
   inputVideo.style.display = 'block';
   document.getElementById('inputPlaceholder').style.display = 'none';
 
-  // Init Decart
-  const canvas = document.getElementById('outputCanvas');
-  canvas.style.display = 'block';
-  document.getElementById('outputPlaceholder').style.display = 'none';
+  const outputVideo = document.getElementById('outputVideo');
 
-  // Load Decart SDK dynamically
-  if (typeof RealtimeClient === 'undefined') {
-    await loadScript('https://cdn.jsdelivr.net/npm/@decart/realtime-client/dist/index.min.js');
-  }
+  // Load the proven Decart SDK (same as the original working project)
+  const { createDecartClient, models } = await import('https://esm.sh/@decartai/sdk');
+  const model = models.realtime('lucy-2.1');
+  const client = createDecartClient({ apiKey: decartApiKey });
 
-  realtimeClient = new RealtimeClient({
-    apiKey: decartApiKey,
-    sourceVideo: inputVideo,
-    targetCanvas: canvas,
-    prompt,
-    enhance
+  realtimeClient = await client.realtime.connect(camStream, {
+    model,
+    onRemoteStream: (transformedStream) => {
+      outputVideo.srcObject = transformedStream;
+      outputVideo.style.display = 'block';
+      document.getElementById('outputPlaceholder').style.display = 'none';
+    },
+  });
+
+  realtimeClient.on('connectionChange', (state) => {
+    const s = (state || '').toLowerCase();
+    if (s === 'disconnected' && isStreaming) { showToast('Video stream disconnected.', 'error'); stopStream(); }
   });
 
   realtimeClient.on('generationTick', async ({ seconds }) => {
@@ -446,15 +532,19 @@ async function startVideoStream() {
   });
 
   realtimeClient.on('error', (err) => {
-    showToast('Video stream error: ' + (err.message || 'Unknown error'), 'error');
+    const msg = err?.message || 'Unknown error';
+    if (!msg.toLowerCase().includes('image send timed out')) showToast('Video stream error: ' + msg, 'error');
   });
 
-  await realtimeClient.start();
+  // Apply initial prompt / enhance / reference image
+  await new Promise(r => setTimeout(r, 1000));
+  await applyVideoSettings(true);
 }
 
 function stopVideoStream() {
   if (realtimeClient) {
-    try { realtimeClient.stop(); } catch (_) {}
+    try { realtimeClient.disconnect?.(); } catch (_) {}
+    try { realtimeClient.close?.(); } catch (_) {}
     realtimeClient = null;
   }
   const inputVideo = document.getElementById('inputVideo');
@@ -464,22 +554,32 @@ function stopVideoStream() {
   }
   inputVideo.style.display = 'none';
   document.getElementById('inputPlaceholder').style.display = 'flex';
+  const outputVideo = document.getElementById('outputVideo');
+  if (outputVideo) { outputVideo.srcObject = null; outputVideo.style.display = 'none'; }
   document.getElementById('outputCanvas').style.display = 'none';
   document.getElementById('outputPlaceholder').style.display = 'flex';
+  settingsApplied = false;
 }
 
-function applyVideoSettings() {
-  if (!isStreaming || !realtimeClient) {
-    showToast('Start streaming first.', 'info');
+async function applyVideoSettings(initial) {
+  if (!realtimeClient) {
+    if (!initial) showToast('Start streaming first.', 'info');
     return;
   }
   const prompt = document.getElementById('promptInput').value.trim();
   const enhance = document.getElementById('enhanceToggle').checked;
+  const payload = { enhance };
+  if (prompt) payload.prompt = prompt;
+  if (referenceFile && !settingsApplied) {
+    payload.image = referenceFile;
+    if (!prompt) payload.prompt = 'Transform my face and body to look exactly like the person in the reference image. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
+  }
   try {
-    realtimeClient.updateSettings({ prompt, enhance });
-    showToast('Settings applied.', 'success');
+    await realtimeClient.set(payload);
+    settingsApplied = true;
+    if (!initial) showToast('Settings applied.', 'success');
   } catch (err) {
-    showToast('Could not apply settings: ' + err.message, 'error');
+    if (!initial) showToast('Could not apply settings: ' + (err.message || err), 'error');
   }
 }
 

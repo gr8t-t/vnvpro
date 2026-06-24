@@ -652,6 +652,7 @@
                 <span>AI Output</span>
               </div>
               <canvas id="outputCanvas" style="display:none; width:100%; height:100%; object-fit:cover;"></canvas>
+              <video id="outputVideo" autoplay playsinline style="display:none; width:100%; height:100%; object-fit:cover;"></video>
               <span class="video-label">AI Output</span>
             </div>
           </div>
@@ -688,11 +689,34 @@
               <input type="range" id="delaySlider" min="0" max="500" value="0" step="10">
             </div>
 
+            <!-- Presets (video modes) -->
+            <div class="control-group" id="presetControl" style="flex-basis:100%;">
+              <label class="control-label">Quick Presets</label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary btn-sm preset-btn" data-prompt="Transform me into an anime character with large expressive eyes and vibrant hair. High quality animation style.">✦ Anime</button>
+                <button type="button" class="btn btn-secondary btn-sm preset-btn" data-prompt="Transform me into a cyberpunk character with neon face implants, chrome accessories, and futuristic urban style.">⚡ Cyber</button>
+                <button type="button" class="btn btn-secondary btn-sm preset-btn" data-prompt="Make me look photorealistic but enhance my features with cinematic lighting and natural skin texture.">◎ Real</button>
+              </div>
+            </div>
+
             <!-- Prompt (video modes) -->
             <div class="control-group" id="promptControl">
               <label class="control-label">AI Prompt</label>
               <input type="text" class="form-input prompt-input" id="promptInput"
                 placeholder="Describe the look (e.g. cyberpunk warrior)" value="anime character, vibrant">
+            </div>
+
+            <!-- Reference image upload (video modes) -->
+            <div class="control-group" id="referenceControl" style="flex-basis:100%;">
+              <label class="control-label">Reference Face Image (optional)</label>
+              <div id="uploadZone" style="border:1.5px dashed var(--border); border-radius:10px; padding:14px; text-align:center; cursor:pointer; position:relative; color:var(--text2); font-size:13px;">
+                <input type="file" id="imageUpload" accept="image/*" style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;">
+                <strong style="color:var(--text);">Upload face image</strong> · JPG/PNG · drag &amp; drop or click
+              </div>
+              <div id="imagePreviewWrap" style="display:none; position:relative; margin-top:10px;">
+                <img id="imagePreview" alt="Reference" style="max-width:120px; border-radius:10px; display:block;">
+                <button type="button" id="removeImage" title="Remove" style="position:absolute; top:6px; left:96px; background:var(--bg3); border:1px solid var(--border); color:var(--red); border-radius:6px; width:26px; height:26px; cursor:pointer;">✕</button>
+              </div>
             </div>
 
             <!-- Enhance toggle (video modes) -->
