@@ -45,10 +45,10 @@ OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
 
 # Real-time tuning (seconds)
-BLOCK_SEC      = 1.30           # audio gathered before each conversion (bigger = clearer words)
-CONTEXT_SEC    = 0.35           # past audio prepended for pitch context
-CROSSFADE_SEC  = 0.08           # overlap blended between consecutive outputs
-SILENCE_RMS    = 0.012          # blocks quieter than this are treated as silence (skip noise)
+BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
+CONTEXT_SEC    = 0.25           # past audio prepended for pitch context (smaller = less word clipping)
+CROSSFADE_SEC  = 0.10           # overlap blended between consecutive outputs (bigger = smoother)
+SILENCE_RMS    = 0.004          # only TRUE silence is gated, so quiet words aren't dropped
 
 app = FastAPI(title="VNV Pro RVC Server")
 app.add_middleware(

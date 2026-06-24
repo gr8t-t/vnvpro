@@ -947,7 +947,14 @@ async function startAudioPipeline(voice) {
       // Gapless scheduling: queue each chunk right after the previous one.
       // audioDelay (slider) adds an initial cushion for syncing with video.
       const now = playbackCtx.currentTime;
-      const startAt = Math.max(now + (audioDelay / 1000), nextPlayTime);
+      const floor = now + (audioDelay / 1000);
+      let startAt = Math.max(floor, nextPlayTime);
+
+      // Drift guard: if the queue has crept too far ahead of real time, the voice
+      // would lag further and further behind. Resync to catch up (small skip).
+      const MAX_LEAD = 0.6 + (audioDelay / 1000); // seconds of allowed buffer
+      if (startAt - now > MAX_LEAD) startAt = floor;
+
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
     } catch (_) {}
