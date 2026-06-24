@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (popoutBtn) {
     popoutBtn.addEventListener('click', () => {
       if (!window.aiOutputStream) { showToast('Start a video stream first.', 'info'); return; }
-      window.open('output.html', 'vnv_output', 'width=1280,height=720');
+      window.open('output.html', '_blank');
     });
   }
 });

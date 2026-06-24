@@ -10,10 +10,17 @@
     #out { width: 100vw; height: 100vh; object-fit: contain; background: #000; display: block; cursor: pointer; }
     #hint {
       position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-      color: rgba(255,255,255,0.7); font-family: system-ui, sans-serif; font-size: 13px;
-      background: rgba(0,0,0,0.5); padding: 8px 14px; border-radius: 999px;
+      color: rgba(255,255,255,0.85); font-family: system-ui, sans-serif; font-size: 14px;
+      background: rgba(0,0,0,0.6); padding: 10px 18px; border-radius: 999px;
       transition: opacity 0.4s; pointer-events: none;
     }
+    #tapfs {
+      position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55); color: #fff; font-family: system-ui, sans-serif;
+      font-size: 20px; cursor: pointer; flex-direction: column; gap: 10px; text-align: center;
+    }
+    #tapfs .big { font-size: 26px; font-weight: 700; }
+    #tapfs.hidden { display: none; }
     #waiting {
       position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
       color: rgba(255,255,255,0.6); font-family: system-ui, sans-serif; font-size: 16px;
@@ -23,12 +30,14 @@
 <body>
   <video id="out" autoplay playsinline></video>
   <div id="waiting">Waiting for AI output… keep the main tab open.</div>
-  <div id="hint">Click the video for full screen · Press Esc to exit</div>
+  <div id="tapfs"><div class="big">⛶ Tap / Click to go Full Screen</div><div>Press Esc to exit full screen</div></div>
+  <div id="hint" style="opacity:0;">Click anywhere for full screen · Press Esc to exit</div>
 
   <script>
     const video   = document.getElementById('out');
     const waiting  = document.getElementById('waiting');
     const hint     = document.getElementById('hint');
+    const tapfs    = document.getElementById('tapfs');
 
     function attach(stream) {
       if (!stream) return false;
@@ -53,13 +62,25 @@
     }
 
     // Click anywhere to toggle true OS full screen
-    video.addEventListener('click', () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-      else document.exitFullscreen?.();
-    });
+    function toggleFs() {
+      if (!document.fullscreenElement) {
+        (document.documentElement.requestFullscreen?.() || Promise.resolve()).catch(() => {});
+      } else {
+        document.exitFullscreen?.();
+      }
+    }
+    document.body.addEventListener('click', toggleFs);
 
-    // Fade the hint after a few seconds
-    setTimeout(() => { hint.style.opacity = '0'; }, 4000);
+    // Hide the prompt overlay once full screen is entered; show hint briefly
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) {
+        tapfs.classList.add('hidden');
+        hint.style.opacity = '1';
+        setTimeout(() => { hint.style.opacity = '0'; }, 3000);
+      } else {
+        tapfs.classList.remove('hidden');
+      }
+    });
 
     // If the main tab closes the stream, show waiting again
     setInterval(() => {
