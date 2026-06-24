@@ -48,7 +48,7 @@ INPUT_SR    = 16000             # what the browser sends us
 BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
 CONTEXT_SEC    = 0.25           # past audio prepended for pitch context (smaller = less word clipping)
 CROSSFADE_SEC  = 0.10           # overlap blended between consecutive outputs (bigger = smoother)
-SILENCE_RMS    = 0.004          # only TRUE silence is gated, so quiet words aren't dropped
+SILENCE_RMS    = 0.0025         # gate only near-silence; lower so quiet word onsets/endings survive
 
 # Voice 2.0 (Premium) — windowed overlap-add: emits the artifact-free CENTRE of each
 # inference, with context on BOTH sides, so chunk-edge breakage is avoided.
@@ -93,7 +93,10 @@ def get_model(folder):
         rvc = RVCInference(device=DEVICE)
         rvc.load_model(pth, index_path=idx)
         # index_rate kept moderate: too high adds warble/artifacts on short blocks
-        rvc.set_params(f0method="rmvpe", f0up_key=0, index_rate=0.5, protect=0.40)
+        # protect < 0.5: lower value keeps MORE of the clean original voice on
+        # breath/unvoiced frames (pipeline blends feats*protect + original*(1-protect)).
+        # 0.33 reduces the "background tearing/noise" RVC otherwise synthesizes there.
+        rvc.set_params(f0method="rmvpe", f0up_key=0, index_rate=0.5, protect=0.33)
         # Warm up so the first real request is fast
         try:
             warm = np.zeros(INPUT_SR, dtype=np.float32)  # 1s of silence
@@ -207,7 +210,7 @@ async def voice_ws(websocket: WebSocket, voice_folder: str):
     block_n     = int(BLOCK_SEC * INPUT_SR)
     context_n   = int(CONTEXT_SEC * INPUT_SR)
     xfade_out_n = int(CROSSFADE_SEC * OUTPUT_SR)
-    min_flush_n = int(0.20 * INPUT_SR)          # process leftovers >=0.2s on pause/stop
+    min_flush_n = int(0.08 * INPUT_SR)          # flush short tails too, so the last word isn't dropped
     # The browser sends ~0.256s chunks (ScriptProcessor 4096 @ 16kHz). FLUSH_IDLE
     # MUST be larger than that gap, or the server times out between every chunk
     # and processes tiny 0.25s fragments instead of full BLOCK_SEC blocks — which
