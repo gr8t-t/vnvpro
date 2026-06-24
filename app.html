@@ -654,6 +654,8 @@
               <canvas id="outputCanvas" style="display:none; width:100%; height:100%; object-fit:cover;"></canvas>
               <video id="outputVideo" autoplay playsinline style="display:none; width:100%; height:100%; object-fit:cover;"></video>
               <span class="video-label">AI Output</span>
+              <button type="button" id="popoutBtn" title="Open AI output fullscreen in a new tab"
+                style="position:absolute; top:8px; right:8px; z-index:5; background:rgba(0,0,0,0.6); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:6px 10px; font-size:12px; cursor:pointer;">⛶ Full Screen</button>
             </div>
           </div>
 
@@ -703,7 +705,7 @@
             <div class="control-group" id="promptControl">
               <label class="control-label">AI Prompt</label>
               <input type="text" class="form-input prompt-input" id="promptInput"
-                placeholder="Describe the look (e.g. cyberpunk warrior)" value="anime character, vibrant">
+                placeholder="e.g. Transform me into the person in the reference image" value="Transform me into the person in the reference image.">
             </div>
 
             <!-- Reference image upload (video modes) -->

@@ -76,6 +76,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   setupVideoControls();
+
+  // Full-screen pop-out of the AI output in a new tab
+  const popoutBtn = document.getElementById('popoutBtn');
+  if (popoutBtn) {
+    popoutBtn.addEventListener('click', () => {
+      if (!window.aiOutputStream) { showToast('Start a video stream first.', 'info'); return; }
+      window.open('output.html', 'vnv_output', 'width=1280,height=720');
+    });
+  }
 });
 
 // ─── VIDEO CONTROLS: presets + reference image ─────────────────────────────────
@@ -514,6 +523,8 @@ async function startVideoStream() {
       outputVideo.srcObject = transformedStream;
       outputVideo.style.display = 'block';
       document.getElementById('outputPlaceholder').style.display = 'none';
+      // expose for the full-screen pop-out tab
+      window.aiOutputStream = transformedStream;
     },
   });
 
@@ -558,6 +569,7 @@ function stopVideoStream() {
   if (outputVideo) { outputVideo.srcObject = null; outputVideo.style.display = 'none'; }
   document.getElementById('outputCanvas').style.display = 'none';
   document.getElementById('outputPlaceholder').style.display = 'flex';
+  window.aiOutputStream = null;
   settingsApplied = false;
 }
 

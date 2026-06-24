@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VNV Pro — AI Output</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #out { width: 100vw; height: 100vh; object-fit: contain; background: #000; display: block; cursor: pointer; }
+    #hint {
+      position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.7); font-family: system-ui, sans-serif; font-size: 13px;
+      background: rgba(0,0,0,0.5); padding: 8px 14px; border-radius: 999px;
+      transition: opacity 0.4s; pointer-events: none;
+    }
+    #waiting {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: rgba(255,255,255,0.6); font-family: system-ui, sans-serif; font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <video id="out" autoplay playsinline></video>
+  <div id="waiting">Waiting for AI output… keep the main tab open.</div>
+  <div id="hint">Click the video for full screen · Press Esc to exit</div>
+
+  <script>
+    const video   = document.getElementById('out');
+    const waiting  = document.getElementById('waiting');
+    const hint     = document.getElementById('hint');
+
+    function attach(stream) {
+      if (!stream) return false;
+      video.srcObject = stream;
+      waiting.style.display = 'none';
+      return true;
+    }
+
+    // Try to grab the stream from the main tab that opened this window
+    function tryGrab() {
+      try {
+        if (window.opener && window.opener.aiOutputStream) {
+          return attach(window.opener.aiOutputStream);
+        }
+      } catch (_) {}
+      return false;
+    }
+
+    if (!tryGrab()) {
+      // poll until the stream becomes available
+      const iv = setInterval(() => { if (tryGrab()) clearInterval(iv); }, 500);
+    }
+
+    // Click anywhere to toggle true OS full screen
+    video.addEventListener('click', () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+      else document.exitFullscreen?.();
+    });
+
+    // Fade the hint after a few seconds
+    setTimeout(() => { hint.style.opacity = '0'; }, 4000);
+
+    // If the main tab closes the stream, show waiting again
+    setInterval(() => {
+      try {
+        if (!window.opener || window.opener.closed || !window.opener.aiOutputStream) {
+          if (video.srcObject) { video.srcObject = null; waiting.style.display = 'flex'; }
+        }
+      } catch (_) {}
+    }, 1500);
+  </script>
+</body>
+</html>
