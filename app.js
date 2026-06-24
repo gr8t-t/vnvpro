@@ -4,11 +4,14 @@
 let mode = 'video';
 let engine = 'v1';                 // 'v1' (Standard) | 'v2' (Premium)
 let selectedVoice = null;
-let audioDelay = 0;
+let videoDelayMs = 0;              // ms to buffer video output (delays video to match slow audio)
+let frameBuffer = [];              // { time: DOMHighResTimeStamp, bmp: ImageBitmap }
+let captureIntervalId = null;      // setInterval handle for frame capture
+let delayRafId = null;             // requestAnimationFrame handle for delayed render
 let rvcWs = null;
-let v2HeartbeatInterval = null;    // holds the Voice 2.0 slot while streaming
-let v1HeartbeatInterval = null;    // counts this user as an active Voice 1.0 stream
-let waitPollInterval = null;       // polls waitlist status
+let v2HeartbeatInterval = null;
+let v1HeartbeatInterval = null;
+let waitPollInterval = null;
 let rvcServerUrl = null;
 let audioCtx = null;
 let playbackCtx = null;
@@ -71,10 +74,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Start key load in background for video modes
   keyLoadPromise = fetchApiKey(currentEmail);
 
-  // Set up delay slider
+  // Set up video sync delay slider
   document.getElementById('delaySlider').addEventListener('input', (e) => {
-    audioDelay = parseInt(e.target.value);
-    document.getElementById('delayLabel').textContent = `Voice Delay: ${audioDelay}ms (sync with video)`;
+    setVideoDelay(parseInt(e.target.value));
   });
 
   // Set up enhance toggle label
@@ -623,14 +625,14 @@ function setMode(m) {
   if (m === 'audio') {
     videoArea.style.display = 'none';
     audioDisplay.style.display = 'block';
-    delayControl.style.display = 'block';
+    delayControl.style.display = 'none';   // no video to sync against in audio-only mode
     videoControls(false);
     voicePanel.style.display = '';
     appColumns.classList.remove('single-col');
   } else if (m === 'both') {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
-    delayControl.style.display = 'block';
+    delayControl.style.display = 'block';  // sync slider only meaningful when both are active
     videoControls(true);
     voicePanel.style.display = '';
     appColumns.classList.remove('single-col');
@@ -717,6 +719,9 @@ async function startStream() {
 function stopStream() {
   isStreaming = false;
 
+  // Stop video delay buffering
+  stopVideoDelay();
+
   // Release the voice engine slot / stop the active-stream count
   stopEngineHeartbeat();
 
@@ -787,6 +792,85 @@ function setStatus(text, live) {
   }
 }
 
+// ─── VIDEO SYNC DELAY ─────────────────────────────────────────────────────────
+// Buffers Decart output frames as ImageBitmaps and renders the frame from
+// videoDelayMs ago, so slow audio (RVC) lines up with the mouth on screen.
+
+function setVideoDelay(ms) {
+  videoDelayMs = ms;
+  const label = document.getElementById('delayLabel');
+  if (label) label.textContent = `Video Delay: ${ms}ms`;
+  if (!isStreaming) return;
+  const outputVideo = document.getElementById('outputVideo');
+  if (!outputVideo.srcObject) return;   // video not started yet
+  if (ms > 0) {
+    outputVideo.style.display = 'none';
+    startVideoDelay();
+  } else {
+    stopVideoDelay();
+    outputVideo.style.display = 'block';
+  }
+}
+
+function startVideoDelay() {
+  stopVideoDelay();   // clear any previous run
+  const outputVideo = document.getElementById('outputVideo');
+  const outputCanvas = document.getElementById('outputCanvas');
+  const ctx = outputCanvas.getContext('2d');
+
+  // Size canvas to match the video's intrinsic resolution (or a safe default)
+  function syncSize() {
+    if (outputVideo.videoWidth > 0) {
+      outputCanvas.width  = outputVideo.videoWidth;
+      outputCanvas.height = outputVideo.videoHeight;
+    } else {
+      outputCanvas.width  = 1280;
+      outputCanvas.height = 720;
+    }
+  }
+  syncSize();
+  outputVideo.addEventListener('loadedmetadata', syncSize, { once: true });
+  outputCanvas.style.display = 'block';
+
+  // Capture a frame every ~33ms (≈30fps)
+  captureIntervalId = setInterval(async () => {
+    if (!isStreaming || outputVideo.readyState < 2) return;
+    try {
+      const bmp = await createImageBitmap(outputVideo);
+      frameBuffer.push({ time: performance.now(), bmp });
+      // Evict frames older than delay + 400ms headroom, freeing GPU memory
+      const cutoff = performance.now() - videoDelayMs - 400;
+      while (frameBuffer.length > 1 && frameBuffer[0].time < cutoff) {
+        frameBuffer[0].bmp.close();
+        frameBuffer.shift();
+      }
+    } catch (_) {}
+  }, 33);
+
+  // Render loop — draws the frame closest to videoDelayMs in the past
+  function render() {
+    if (!isStreaming) return;
+    const target = performance.now() - videoDelayMs;
+    let best = null;
+    for (const f of frameBuffer) {
+      if (f.time <= target) best = f;
+      else break;
+    }
+    if (best) ctx.drawImage(best.bmp, 0, 0, outputCanvas.width, outputCanvas.height);
+    delayRafId = requestAnimationFrame(render);
+  }
+  delayRafId = requestAnimationFrame(render);
+}
+
+function stopVideoDelay() {
+  if (captureIntervalId) { clearInterval(captureIntervalId); captureIntervalId = null; }
+  if (delayRafId)        { cancelAnimationFrame(delayRafId);  delayRafId = null; }
+  frameBuffer.forEach(f => { try { f.bmp.close(); } catch (_) {} });
+  frameBuffer = [];
+  const outputCanvas = document.getElementById('outputCanvas');
+  if (outputCanvas) outputCanvas.style.display = 'none';
+}
+
 // ─── VIDEO STREAM ──────────────────────────────────────────────────────────────
 async function startVideoStream() {
   // Ensure API key is loaded
@@ -827,10 +911,15 @@ async function startVideoStream() {
     model,
     onRemoteStream: (transformedStream) => {
       outputVideo.srcObject = transformedStream;
-      outputVideo.style.display = 'block';
       document.getElementById('outputPlaceholder').style.display = 'none';
-      // expose for the full-screen pop-out tab
       window.aiOutputStream = transformedStream;
+      // Start video delay buffering if slider is non-zero; otherwise show live
+      if (videoDelayMs > 0) {
+        outputVideo.style.display = 'none';
+        startVideoDelay();
+      } else {
+        outputVideo.style.display = 'block';
+      }
     },
   });
 
@@ -1013,7 +1102,7 @@ async function startAudioPipeline(voice) {
       // Only ever resync FORWARD (on an underrun/gap); never move a start time
       // backwards, which would overlap already-queued audio and echo/repeat words.
       const now = playbackCtx.currentTime;
-      const minStart = now + 0.02 + (audioDelay / 1000);
+      const minStart = now + 0.02;
       const startAt = nextPlayTime > minStart ? nextPlayTime : minStart;
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
