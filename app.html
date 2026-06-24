@@ -567,6 +567,20 @@
       .app-content { padding: 12px; }
       .mode-selector { flex-direction: column; }
       .mode-btn { min-width: unset; }
+      .app-header { padding: 10px 14px; gap: 8px; }
+      .bottom-bar { padding: 12px 14px; gap: 10px; }
+      .controls-panel { padding: 12px; gap: 12px; }
+      .control-group { min-width: 100%; }
+      .stream-area { padding: 12px; min-height: 0; gap: 12px; }
+      /* keep Start/Stop comfortably tappable */
+      .bottom-bar .btn { min-height: 44px; }
+    }
+
+    @media (max-width: 400px) {
+      .app-header { padding: 8px 10px; }
+      .panel-header { padding: 12px; }
+      #codeOverlay > div { padding: 24px 18px; }
+      #codeValue { font-size: 20px; }
     }
   </style>
 </head>
