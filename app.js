@@ -1047,7 +1047,11 @@ async function startAudioPipeline(voice) {
   playbackCtx = new AudioContext({ sampleRate: RVC_OUTPUT_SR });
   nextPlayTime = 0;
   micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: true },
+    // echoCancellation MUST be on: the converted voice plays out the speakers,
+    // and without AEC the mic re-captures it, the server re-converts it, and it
+    // loops/stacks — the "repeating continuously" bug. AEC cancels that playback
+    // out of the mic signal (same as video calls) while keeping your dry voice.
+    audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: true },
     video: false
   });
 
@@ -1098,15 +1102,12 @@ async function startAudioPipeline(voice) {
       src.buffer = buffer;
       src.connect(playbackCtx.destination);
 
-      // Gapless scheduling: queue each chunk right after the previous one.
+      // Strictly forward-only scheduling: every chunk starts AFTER the previous
+      // one ends, so converted audio can never overlap/stack on itself (no echo).
+      // The start time is never moved backward. Latency stays bounded on its own
+      // because the server is paced by the realtime mic — it can't run far ahead.
       const now = playbackCtx.currentTime;
-      let startAt = Math.max(now, nextPlayTime);
-
-      // Drift guard: if the queue has crept too far ahead of real time, the voice
-      // would lag further and further behind. Resync to catch up (small skip).
-      const MAX_LEAD = 0.6; // seconds of allowed buffer
-      if (startAt - now > MAX_LEAD) startAt = now;
-
+      const startAt = Math.max(now + 0.03, nextPlayTime);
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
     } catch (_) {}

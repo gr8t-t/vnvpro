@@ -208,7 +208,12 @@ async def voice_ws(websocket: WebSocket, voice_folder: str):
     context_n   = int(CONTEXT_SEC * INPUT_SR)
     xfade_out_n = int(CROSSFADE_SEC * OUTPUT_SR)
     min_flush_n = int(0.20 * INPUT_SR)          # process leftovers >=0.2s on pause/stop
-    FLUSH_IDLE  = 0.25                          # seconds of no audio before flushing tail
+    # The browser sends ~0.256s chunks (ScriptProcessor 4096 @ 16kHz). FLUSH_IDLE
+    # MUST be larger than that gap, or the server times out between every chunk
+    # and processes tiny 0.25s fragments instead of full BLOCK_SEC blocks — which
+    # makes RVC choppy and unclear. 0.50s lets chunks accumulate into real blocks
+    # and only flushes the tail on an actual speech pause.
+    FLUSH_IDLE  = 0.50                          # seconds of no audio before flushing tail
 
     state = {
         "context":   np.zeros(0, dtype=np.float32),  # trailing input context (16k)
