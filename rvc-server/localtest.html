@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VNV Pro — LOCAL RVC Test (no ngrok / no Vercel)</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; background:#0e0e12; color:#e8e8ef; margin:0; padding:24px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  .sub { color:#9a9ab0; font-size:13px; margin-bottom:18px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  input { background:#1a1a22; border:1px solid #33334a; color:#fff; padding:8px 10px; border-radius:8px; font-size:14px; }
+  button { background:#7c3aed; color:#fff; border:none; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.stop { background:#444; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:16px 0; }
+  .stat { background:#16161e; border:1px solid #2a2a3a; border-radius:10px; padding:12px; }
+  .stat .k { font-size:11px; color:#9a9ab0; text-transform:uppercase; letter-spacing:.04em; }
+  .stat .v { font-size:22px; font-weight:700; margin-top:4px; }
+  .meter { height:10px; background:#1a1a22; border-radius:5px; overflow:hidden; }
+  .meter > div { height:100%; width:0%; background:#7c3aed; transition:width .05s; }
+  #log { background:#000; border:1px solid #2a2a3a; border-radius:10px; padding:12px; height:200px; overflow:auto;
+         font-family:Consolas,monospace; font-size:12px; white-space:pre-wrap; color:#b8b8c8; }
+  .pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
+  .pill.idle { background:#333; color:#bbb; }
+  .pill.live { background:#1f7a3a; color:#fff; }
+  .warn { color:#ffaa00; }
+</style>
+</head>
+<body>
+  <h1>VNV Pro — LOCAL RVC Streaming Test</h1>
+  <div class="sub">Talks directly to <b>ws://localhost:8765</b>. No ngrok, no Vercel, no login. Use headphones to avoid feedback.</div>
+
+  <div class="row">
+    <label>Voice folder:</label>
+    <input id="voice" value="samelliott" size="16">
+    <label>Server:</label>
+    <input id="server" value="ws://localhost:8765" size="20">
+    <label>Engine:</label>
+    <select id="engine" style="background:#1a1a22;border:1px solid #33334a;color:#fff;padding:8px 10px;border-radius:8px;font-size:14px;">
+      <option value="/ws/">Block (v1)</option>
+      <option value="/ws2/">Overlap-add (v2) — smoother</option>
+    </select>
+    <span id="status" class="pill idle">IDLE</span>
+  </div>
+
+  <div class="row">
+    <button id="startBtn">▶ Start Talking</button>
+    <button id="stopBtn" class="stop" disabled>■ Stop</button>
+  </div>
+
+  <div class="row">
+    <div style="flex:1;"><div class="sub" style="margin:0 0 4px;">Mic level</div><div class="meter"><div id="micMeter"></div></div></div>
+    <div style="flex:1;"><div class="sub" style="margin:0 0 4px;">Output level</div><div class="meter"><div id="outMeter"></div></div></div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">Time to 1st audio</div><div class="v" id="ttfa">—</div></div>
+    <div class="stat"><div class="k">Frames received</div><div class="v" id="frames">0</div></div>
+    <div class="stat"><div class="k">Avg gap between frames</div><div class="v" id="avggap">—</div></div>
+    <div class="stat"><div class="k">Max gap (jitter)</div><div class="v" id="maxgap">—</div></div>
+    <div class="stat"><div class="k">Playback underruns</div><div class="v" id="underruns">0</div></div>
+    <div class="stat"><div class="k">Audio received</div><div class="v" id="secs">0.0s</div></div>
+  </div>
+
+  <div id="log"></div>
+
+<script>
+const INPUT_SR = 16000, OUTPUT_SR = 48000;
+const PREROLL_SEC = 0.7;   // jitter buffer: cushion held before playback so late chunks don't starve the queue
+let ws=null, audioCtx=null, playbackCtx=null, micStream=null, processor=null, source=null, analyser=null;
+let nextPlayTime=0, streaming=false, meterTimer=null;
+// diagnostics
+let firstSendAt=0, firstRecvAt=0, lastRecvAt=0, frameCount=0, gapSum=0, maxGap=0, totalSamples=0, underruns=0, outLevel=0;
+
+const $ = id => document.getElementById(id);
+function log(m){ const t=new Date().toLocaleTimeString(); $('log').textContent += `[${t}] ${m}\n`; $('log').scrollTop=$('log').scrollHeight; }
+
+async function start(){
+  if(streaming) return;
+  const voice = $('voice').value.trim();
+  const server = $('server').value.trim().replace(/\/$/,'');
+  if(!voice){ log('Enter a voice folder name.'); return; }
+
+  // reset diagnostics
+  firstSendAt=firstRecvAt=lastRecvAt=0; frameCount=0; gapSum=0; maxGap=0; totalSamples=0; underruns=0;
+  $('ttfa').textContent='—'; $('frames').textContent='0'; $('avggap').textContent='—'; $('maxgap').textContent='—'; $('underruns').textContent='0'; $('secs').textContent='0.0s';
+
+  const path = $('engine').value;
+  const url = server.replace(/^http/,'ws') + path + voice;
+  log('Connecting to ' + url + ' ('+($('engine').selectedOptions[0].text)+') ...');
+  ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
+
+  await new Promise((res,rej)=>{
+    const to=setTimeout(()=>rej(new Error('connect timeout')),8000);
+    ws.onopen=()=>{clearTimeout(to);res();};
+    ws.onerror=()=>{clearTimeout(to);rej(new Error('connect error'));};
+  }).catch(e=>{ log('❌ '+e.message+' — is the Python server running on localhost:8765?'); ws=null; });
+  if(!ws) return;
+  log('✅ WebSocket open.');
+
+  audioCtx = new AudioContext({ sampleRate: INPUT_SR });
+  playbackCtx = new AudioContext({ sampleRate: OUTPUT_SR });
+  nextPlayTime = 0;
+
+  micStream = await navigator.mediaDevices.getUserMedia({
+    audio:{ echoCancellation:true, autoGainControl:false, noiseSuppression:true }, video:false
+  });
+  source = audioCtx.createMediaStreamSource(micStream);
+  analyser = audioCtx.createAnalyser(); analyser.fftSize=256; source.connect(analyser);
+
+  processor = audioCtx.createScriptProcessor(4096,1,1);
+  processor.onaudioprocess = e=>{
+    if(!ws || ws.readyState!==WebSocket.OPEN) return;
+    const f32 = e.inputBuffer.getChannelData(0);
+    const i16 = new Int16Array(f32.length);
+    for(let i=0;i<f32.length;i++) i16[i]=Math.max(-32768,Math.min(32767,f32[i]*32767));
+    if(!firstSendAt) firstSendAt=performance.now();
+    ws.send(i16.buffer);
+  };
+  source.connect(processor); processor.connect(audioCtx.destination);
+
+  ws.onmessage = ev=>{
+    const now=performance.now();
+    if(!firstRecvAt){ firstRecvAt=now; const ttfa=Math.round(firstRecvAt-firstSendAt); $('ttfa').textContent=ttfa+' ms';
+      log('First audio back after '+ttfa+' ms.'); }
+    if(lastRecvAt){ const gap=now-lastRecvAt; gapSum+=gap; if(gap>maxGap) maxGap=gap; }
+    lastRecvAt=now; frameCount++;
+
+    const ab = ev.data;
+    const i16 = new Int16Array(ab);
+    const f32 = new Float32Array(i16.length);
+    for(let i=0;i<i16.length;i++) f32[i]=i16[i]/32767;
+    totalSamples += i16.length;
+
+    let s=0; for(let i=0;i<f32.length;i++) s+=f32[i]*f32[i];
+    outLevel=Math.min(100,Math.sqrt(s/f32.length)*300);
+
+    const buf=playbackCtx.createBuffer(1,f32.length,OUTPUT_SR);
+    buf.getChannelData(0).set(f32);
+    const src=playbackCtx.createBufferSource(); src.buffer=buf; src.connect(playbackCtx.destination);
+    const t=playbackCtx.currentTime;
+    // Jitter buffer: if the queue is empty (or this is the first chunk), don't play
+    // immediately — schedule PREROLL_SEC ahead so we build a cushion. Otherwise play
+    // gaplessly right after the previous chunk (forward-only, never overlap).
+    let startAt;
+    if(nextPlayTime <= t + 0.001){
+      if(frameCount > 1){ underruns++; $('underruns').textContent=underruns; } // not the initial prime
+      startAt = t + PREROLL_SEC;
+    } else {
+      startAt = nextPlayTime;
+    }
+    src.start(startAt); nextPlayTime=startAt+buf.duration;
+
+    // live stats
+    $('frames').textContent=frameCount;
+    $('avggap').textContent=(frameCount>1?Math.round(gapSum/(frameCount-1)):0)+' ms';
+    $('maxgap').textContent=Math.round(maxGap)+' ms';
+    $('secs').textContent=(totalSamples/OUTPUT_SR).toFixed(1)+'s';
+  };
+  ws.onclose=()=>{ if(streaming){ log('⚠ WebSocket closed.'); stop(); } };
+
+  const data=new Uint8Array(analyser.frequencyBinCount);
+  meterTimer=setInterval(()=>{
+    analyser.getByteTimeDomainData(data);
+    let s=0; for(let i=0;i<data.length;i++){const v=(data[i]-128)/128;s+=v*v;}
+    $('micMeter').style.width=Math.min(100,Math.sqrt(s/data.length)*400)+'%';
+    $('outMeter').style.width=outLevel+'%'; outLevel*=0.85;
+  },50);
+
+  streaming=true; $('startBtn').disabled=true; $('stopBtn').disabled=false;
+  $('status').className='pill live'; $('status').textContent='LIVE';
+  log('🎤 Talk now. Watch "Max gap" — if it spikes well above ~1000ms you have jitter/underruns (cracking).');
+}
+
+function stop(){
+  streaming=false;
+  if(meterTimer){clearInterval(meterTimer);meterTimer=null;}
+  if(processor){try{processor.disconnect();}catch(_){}}
+  if(source){try{source.disconnect();}catch(_){}}
+  if(audioCtx){try{audioCtx.close();}catch(_){}}
+  if(playbackCtx){try{playbackCtx.close();}catch(_){}}
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());}
+  if(ws){try{ws.close();}catch(_){}}
+  ws=null;
+  $('startBtn').disabled=false; $('stopBtn').disabled=true;
+  $('status').className='pill idle'; $('status').textContent='IDLE';
+  $('micMeter').style.width='0%'; $('outMeter').style.width='0%';
+  if(frameCount){
+    log(`— Summary — frames:${frameCount}  avg gap:${Math.round(gapSum/Math.max(1,frameCount-1))}ms  max gap:${Math.round(maxGap)}ms  underruns:${underruns}  time-to-1st-audio:${firstRecvAt?Math.round(firstRecvAt-firstSendAt):'?'}ms`);
+  }
+}
+
+$('startBtn').onclick=()=>start().catch(e=>log('❌ '+e.message));
+$('stopBtn').onclick=stop;
+</script>
+</body>
+</html>
