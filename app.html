@@ -643,7 +643,8 @@
               Loading voices...
             </div>
           </div>
-          <div style="padding: 12px; border-top: 1px solid var(--border);">
+          <div style="padding: 12px; border-top: 1px solid var(--border); display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-secondary btn-sm w-full" onclick="openRecorder()">🎙 Record &amp; Download MP3</button>
             <button class="btn btn-ghost btn-sm w-full" onclick="openRequestVoice()">+ Request Custom Voice</button>
           </div>
         </div>
@@ -888,6 +889,51 @@
         </a>
       </div>
       <button class="btn btn-primary w-full" onclick="submitVoiceRequest()">Submit Request</button>
+    </div>
+  </div>
+
+  <!-- Voice Recorder Modal -->
+  <div class="modal-overlay hidden" id="recorderModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">🎙 Record &amp; Download</span>
+        <button class="modal-close" onclick="closeRecorder()">✕</button>
+      </div>
+      <p style="font-size:13px; color:var(--text2); margin-bottom:12px;">
+        Record up to 120 seconds, convert it to <strong id="recVoiceName">the selected voice</strong>, then download as MP3.
+        Costs <strong>0.3 coins/sec</strong> of recording.
+      </p>
+
+      <div id="recNoVoice" style="display:none; background:rgba(239,68,68,0.1); border:1px solid var(--red); border-radius:8px; padding:12px; font-size:13px; color:var(--red); margin-bottom:12px;">
+        Please select a voice first (close this and pick one from the list).
+      </div>
+
+      <div style="text-align:center; padding:14px 0;">
+        <div id="recTimer" style="font-family:monospace; font-size:34px; font-weight:700; color:var(--accent2); margin-bottom:6px;">0:00</div>
+        <div id="recHint" style="font-size:12px; color:var(--text2);">Max 2:00</div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:14px;">
+        <button class="btn btn-primary" id="recStartBtn" style="flex:1;" onclick="recStart()">● Record</button>
+        <button class="btn btn-secondary" id="recStopBtn" style="flex:1; display:none;" onclick="recStop()">■ Stop</button>
+      </div>
+
+      <!-- After recording -->
+      <div id="recReview" style="display:none;">
+        <div style="font-size:12px; color:var(--text2); margin-bottom:6px;">Your recording:</div>
+        <audio id="recOriginalAudio" controls style="width:100%; margin-bottom:12px;"></audio>
+        <button class="btn btn-primary w-full" id="recConvertBtn" onclick="recConvert()" style="margin-bottom:12px;">
+          Convert to Voice (<span id="recCost">0</span> coins)
+        </button>
+      </div>
+
+      <!-- After conversion -->
+      <div id="recResult" style="display:none;">
+        <div style="font-size:12px; color:var(--green); margin-bottom:6px;">✓ Converted:</div>
+        <audio id="recConvertedAudio" controls style="width:100%; margin-bottom:12px;"></audio>
+        <button class="btn btn-primary w-full" id="recDownloadBtn" onclick="recDownload()">⬇ Download MP3</button>
+        <button class="btn btn-ghost btn-sm w-full" onclick="recReset()" style="margin-top:8px;">Record Again</button>
+      </div>
     </div>
   </div>
 

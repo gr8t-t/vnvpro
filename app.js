@@ -199,6 +199,232 @@ function compressImage(file, maxSize = 1024) {
   });
 }
 
+// ─── VOICE RECORDER (Record → convert → download MP3) ──────────────────────────
+const REC_MAX_SEC = 120;
+let recMediaRecorder = null;
+let recChunks = [];
+let recMicStream = null;
+let recTimerInterval = null;
+let recSeconds = 0;
+let recordedDuration = 0;
+let recConvertedBlob = null;   // converted WAV from server
+let recConvertedMp3 = null;    // encoded MP3 blob
+
+function openRecorder() {
+  const modal = document.getElementById('recorderModal');
+  const noVoice = document.getElementById('recNoVoice');
+  if (!selectedVoice) {
+    noVoice.style.display = 'block';
+    document.getElementById('recStartBtn').disabled = true;
+  } else {
+    noVoice.style.display = 'none';
+    document.getElementById('recStartBtn').disabled = false;
+    document.getElementById('recVoiceName').textContent = selectedVoice.name;
+  }
+  recReset();
+  modal.classList.remove('hidden');
+}
+
+function closeRecorder() {
+  recStopMic();
+  if (recTimerInterval) { clearInterval(recTimerInterval); recTimerInterval = null; }
+  document.getElementById('recorderModal').classList.add('hidden');
+}
+
+function recStopMic() {
+  if (recMediaRecorder && recMediaRecorder.state !== 'inactive') {
+    try { recMediaRecorder.stop(); } catch (_) {}
+  }
+  if (recMicStream) { recMicStream.getTracks().forEach(t => t.stop()); recMicStream = null; }
+}
+
+function recReset() {
+  recChunks = [];
+  recSeconds = 0;
+  recordedDuration = 0;
+  recConvertedBlob = null;
+  recConvertedMp3 = null;
+  document.getElementById('recTimer').textContent = '0:00';
+  document.getElementById('recStartBtn').style.display = '';
+  document.getElementById('recStopBtn').style.display = 'none';
+  document.getElementById('recReview').style.display = 'none';
+  document.getElementById('recResult').style.display = 'none';
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return `${m}:${ss.toString().padStart(2, '0')}`;
+}
+
+async function recStart() {
+  if (!selectedVoice) { showToast('Select a voice first.', 'error'); return; }
+  try {
+    recMicStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: true }, video: false
+    });
+  } catch (_) {
+    showToast('Microphone access denied.', 'error'); return;
+  }
+  recChunks = [];
+  recMediaRecorder = new MediaRecorder(recMicStream);
+  recMediaRecorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
+  recMediaRecorder.onstop = onRecStopped;
+  recMediaRecorder.start();
+
+  recSeconds = 0;
+  document.getElementById('recTimer').textContent = '0:00';
+  document.getElementById('recStartBtn').style.display = 'none';
+  document.getElementById('recStopBtn').style.display = '';
+  document.getElementById('recReview').style.display = 'none';
+  document.getElementById('recResult').style.display = 'none';
+
+  recTimerInterval = setInterval(() => {
+    recSeconds += 1;
+    document.getElementById('recTimer').textContent = fmtTime(recSeconds);
+    if (recSeconds >= REC_MAX_SEC) recStop();
+  }, 1000);
+}
+
+function recStop() {
+  if (recTimerInterval) { clearInterval(recTimerInterval); recTimerInterval = null; }
+  recStopMic();
+  document.getElementById('recStopBtn').style.display = 'none';
+}
+
+async function onRecStopped() {
+  const blob = new Blob(recChunks, { type: recChunks[0]?.type || 'audio/webm' });
+  // Decode to get duration + PCM for clean WAV
+  try {
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+    recordedDuration = buf.duration;
+    await ctx.close();
+    window._recAudioBuffer = buf;
+  } catch (_) {
+    recordedDuration = recSeconds;
+    window._recAudioBuffer = null;
+  }
+
+  document.getElementById('recOriginalAudio').src = URL.createObjectURL(blob);
+  const cost = Math.ceil(recordedDuration * 0.3);
+  document.getElementById('recCost').textContent = cost;
+  document.getElementById('recStartBtn').style.display = '';
+  document.getElementById('recReview').style.display = 'block';
+}
+
+// Build a 16kHz mono 16-bit WAV blob from an AudioBuffer
+function audioBufferToWav(buf, targetSR = 16000) {
+  const src = buf.getChannelData(0);
+  const ratio = buf.sampleRate / targetSR;
+  const outLen = Math.floor(src.length / ratio);
+  const pcm = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const s = src[Math.floor(i * ratio)] || 0;
+    pcm[i] = Math.max(-32768, Math.min(32767, s * 32767));
+  }
+  const buffer = new ArrayBuffer(44 + pcm.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  writeStr(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); writeStr(8, 'WAVE');
+  writeStr(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, targetSR, true);
+  view.setUint32(28, targetSR * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  writeStr(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, pcm[i], true);
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+async function recConvert() {
+  if (!rvcServerUrl) { showToast('Voice server not available. Try later.', 'error'); return; }
+  if (!window._recAudioBuffer) { showToast('Could not read recording. Record again.', 'error'); return; }
+
+  const cost = Math.ceil(recordedDuration * 0.3);
+  if (coinBalance < cost) { showToast(`Need ${cost} coins for this recording. Please top up.`, 'error'); return; }
+
+  const btn = document.getElementById('recConvertBtn');
+  btn.disabled = true; btn.textContent = 'Converting…';
+
+  try {
+    const wavBlob = audioBufferToWav(window._recAudioBuffer, 16000);
+    const fd = new FormData();
+    fd.append('voice', selectedVoice.folderName);
+    fd.append('pitch', '0');
+    fd.append('file', wavBlob, 'recording.wav');
+
+    const res = await fetch(rvcServerUrl.replace(/\/$/, '') + '/convert', {
+      method: 'POST',
+      headers: { 'ngrok-skip-browser-warning': 'true' },
+      body: fd
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Conversion failed');
+    }
+    recConvertedBlob = await res.blob();
+
+    // Charge coins for the recording length
+    await drainCoins(Math.ceil(recordedDuration), 'record');
+
+    // Encode to MP3 for download + preview
+    recConvertedMp3 = await wavBlobToMp3(recConvertedBlob);
+
+    document.getElementById('recConvertedAudio').src = URL.createObjectURL(recConvertedMp3 || recConvertedBlob);
+    document.getElementById('recReview').style.display = 'none';
+    document.getElementById('recResult').style.display = 'block';
+  } catch (e) {
+    showToast('Conversion error: ' + (e.message || e), 'error');
+  }
+  btn.disabled = false; btn.textContent = `Convert to Voice (${cost} coins)`;
+}
+
+// Convert a WAV blob to an MP3 blob using lamejs (loaded on demand)
+async function wavBlobToMp3(wavBlob) {
+  try {
+    if (typeof lamejs === 'undefined') {
+      await loadScript('https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js');
+    }
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await wavBlob.arrayBuffer());
+    await ctx.close();
+    const sr = buf.sampleRate;
+    const samples = buf.getChannelData(0);
+    const pcm = new Int16Array(samples.length);
+    for (let i = 0; i < samples.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, samples[i] * 32767));
+
+    const enc = new lamejs.Mp3Encoder(1, sr, 128);
+    const block = 1152;
+    const out = [];
+    for (let i = 0; i < pcm.length; i += block) {
+      const chunk = pcm.subarray(i, i + block);
+      const mp3buf = enc.encodeBuffer(chunk);
+      if (mp3buf.length) out.push(mp3buf);
+    }
+    const end = enc.flush();
+    if (end.length) out.push(end);
+    return new Blob(out, { type: 'audio/mp3' });
+  } catch (_) {
+    return null; // fall back to WAV download
+  }
+}
+
+function recDownload() {
+  const blob = recConvertedMp3 || recConvertedBlob;
+  if (!blob) return;
+  const ext = recConvertedMp3 ? 'mp3' : 'wav';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `vnvpro-${(selectedVoice?.name || 'voice').replace(/\s+/g, '_').toLowerCase()}.${ext}`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
 // ─── SESSION / AUTH ────────────────────────────────────────────────────────────
 async function sendHeartbeat() {
   try {
@@ -638,16 +864,6 @@ async function applyVideoSettings(initial) {
   } catch (err) {
     if (!initial) showToast('Could not apply settings: ' + (err.message || err), 'error');
   }
-}
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
 }
 
 // ─── AUDIO PIPELINE ────────────────────────────────────────────────────────────
