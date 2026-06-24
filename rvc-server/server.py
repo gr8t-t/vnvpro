@@ -44,11 +44,18 @@ DEVICE      = "cuda:0"          # set to "cpu" if no NVIDIA GPU
 OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
 
-# Real-time tuning (seconds)
+# Real-time tuning (seconds) — Voice 1.0 (Standard)
 BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
 CONTEXT_SEC    = 0.25           # past audio prepended for pitch context (smaller = less word clipping)
 CROSSFADE_SEC  = 0.10           # overlap blended between consecutive outputs (bigger = smoother)
 SILENCE_RMS    = 0.004          # only TRUE silence is gated, so quiet words aren't dropped
+
+# Voice 2.0 (Premium) — windowed overlap-add: emits the artifact-free CENTRE of each
+# inference, with context on BOTH sides, so chunk-edge breakage is avoided.
+V2_HOP_SEC       = 0.50         # new audio emitted per step
+V2_LOOKBACK_SEC  = 0.50         # past context fed into each inference
+V2_LOOKAHEAD_SEC = 0.50         # future context fed into each inference (adds this much latency)
+V2_XFADE_SEC     = 0.10         # crossfade between consecutive emitted segments
 
 app = FastAPI(title="VNV Pro RVC Server")
 app.add_middleware(
@@ -278,12 +285,110 @@ async def voice_ws(websocket: WebSocket, voice_folder: str):
             pass
 
 
+# ── WebSocket: Voice 2.0 (Premium) — windowed overlap-add ─────────────────────
+@app.websocket("/ws2/{voice_folder}")
+async def voice_ws2(websocket: WebSocket, voice_folder: str):
+    await websocket.accept()
+    print(f"[RVC] WS2 connected -> {voice_folder}")
+    try:
+        rvc = get_model(voice_folder)
+    except Exception as e:
+        await websocket.send_text(json.dumps({"error": str(e)}))
+        await websocket.close()
+        return
+
+    hop_n       = int(V2_HOP_SEC * INPUT_SR)
+    lookback_n  = int(V2_LOOKBACK_SEC * INPUT_SR)
+    lookahead_n = int(V2_LOOKAHEAD_SEC * INPUT_SR)
+    xfade_out_n = int(V2_XFADE_SEC * OUTPUT_SR)
+    FLUSH_IDLE  = 0.25
+
+    state = {
+        "history":   np.zeros(0, dtype=np.float32),  # past input kept as lookback (16k)
+        "prev_tail": np.zeros(0, dtype=np.float32),  # previous emitted output tail (48k)
+    }
+    in_buf = np.zeros(0, dtype=np.float32)            # unconsumed input (16k)
+
+    async def process(hop, lookahead, is_flush=False):
+        history = state["history"]
+        window  = np.concatenate([history, hop, lookahead]) if (len(history) or len(lookahead)) else hop
+        if len(window) == 0:
+            return
+
+        # Silence gate on the hop itself
+        rms = float(np.sqrt(np.mean(hop * hop))) if len(hop) else 0.0
+        if rms < SILENCE_RMS:
+            state["history"] = (np.concatenate([history, hop]))[-lookback_n:] if lookback_n else np.zeros(0, dtype=np.float32)
+            state["prev_tail"] = np.zeros(0, dtype=np.float32)
+            sil = np.zeros(int(len(hop) * OUTPUT_SR / INPUT_SR), dtype=np.int16)
+            await websocket.send_bytes(sil.tobytes())
+            return
+
+        out, _ = _infer_array(rvc, window, INPUT_SR)
+
+        # Emit only the CENTRE region that corresponds to `hop` (skip lookback &
+        # lookahead portions). Centre is artifact-free since both sides had context.
+        total = len(window)
+        start = int(len(out) * len(history) / total)
+        end   = int(len(out) * (len(history) + len(hop)) / total)
+        seg   = out[start:end].copy()
+
+        # crossfade with previous emitted tail to smooth the join
+        prev_tail = state["prev_tail"]
+        if len(prev_tail) and len(seg) > xfade_out_n:
+            fade = min(xfade_out_n, len(prev_tail), len(seg))
+            ramp = np.linspace(0, 1, fade, dtype=np.float32)
+            seg[:fade] = seg[:fade] * ramp + prev_tail[:fade] * (1 - ramp)
+
+        if not is_flush and len(seg) > xfade_out_n:
+            state["prev_tail"] = seg[-xfade_out_n:].copy()
+            send = seg[:-xfade_out_n]
+        else:
+            state["prev_tail"] = np.zeros(0, dtype=np.float32)
+            send = seg
+
+        state["history"] = (np.concatenate([history, hop]))[-lookback_n:] if lookback_n else np.zeros(0, dtype=np.float32)
+        pcm = np.clip(send * 32767.0, -32768, 32767).astype(np.int16)
+        await websocket.send_bytes(pcm.tobytes())
+
+    try:
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_bytes(), timeout=FLUSH_IDLE)
+            except asyncio.TimeoutError:
+                # flush trailing audio (no lookahead available at end)
+                if len(in_buf) >= int(0.20 * INPUT_SR):
+                    await process(in_buf, np.zeros(0, dtype=np.float32), is_flush=True)
+                    in_buf = np.zeros(0, dtype=np.float32)
+                continue
+
+            chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32767.0
+            in_buf = np.concatenate([in_buf, chunk])
+
+            # need hop + lookahead available before emitting a hop
+            while len(in_buf) >= hop_n + lookahead_n:
+                hop       = in_buf[:hop_n]
+                lookahead = in_buf[hop_n:hop_n + lookahead_n]   # peek, not consumed
+                in_buf    = in_buf[hop_n:]                       # consume only the hop
+                await process(hop, lookahead)
+
+    except WebSocketDisconnect:
+        print(f"[RVC] WS2 disconnected -> {voice_folder}")
+    except Exception as e:
+        print(f"[RVC] WS2 error: {e}")
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     print("=" * 56)
     print("  VNV Pro RVC Server")
     print("  Models dir:", MODELS_DIR)
     print("  Device:", DEVICE)
-    print("  Realtime WS:  /ws/{voice_folder}")
-    print("  File convert: POST /convert")
+    print("  Realtime WS:   /ws/{voice_folder}   (Voice 1.0)")
+    print("  Premium WS:    /ws2/{voice_folder}  (Voice 2.0)")
+    print("  File convert:  POST /convert")
     print("=" * 56)
     uvicorn.run(app, host="0.0.0.0", port=8765)

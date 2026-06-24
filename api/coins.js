@@ -7,7 +7,7 @@ const RATES_KEY = 'vnv_drain_rates';
 const PACKAGES_KEY = 'vnv_coin_packages';
 const PENDING_TOPUPS_KEY = 'vnv_pending_topups';
 
-const DEFAULT_RATES = { video: 2.0, audio: 0.5, both: 2.5, record: 0.3 };
+const DEFAULT_RATES = { video: 2.0, audio: 0.5, both: 2.5, record: 0.3, audio2: 1.0, both2: 3.5 };
 
 const DEFAULT_PACKAGES = [
   { id: 'pkg_starter',  coins: 720,  priceNaira: 16000,  priceUsd: 10,  label: 'Starter' },
