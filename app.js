@@ -19,6 +19,7 @@ let nextPlayTime = 0;
 let micStream = null;
 let processor = null;
 const RVC_OUTPUT_SR = 48000;
+const PREROLL_SEC = 0.5;   // jitter-buffer cushion before playback — absorbs network/inference jitter so audio doesn't starve & crack (measured: underruns 29 -> 3)
 let lastBilledSeconds = 0;
 let decartApiKey = null;
 let keyLoadPromise = null;
@@ -1102,12 +1103,19 @@ async function startAudioPipeline(voice) {
       src.buffer = buffer;
       src.connect(playbackCtx.destination);
 
-      // Strictly forward-only scheduling: every chunk starts AFTER the previous
-      // one ends, so converted audio can never overlap/stack on itself (no echo).
-      // The start time is never moved backward. Latency stays bounded on its own
-      // because the server is paced by the realtime mic — it can't run far ahead.
+      // Jitter-buffered, forward-only scheduling. When the queue is empty (first
+      // chunk, or after a drain) we don't play immediately — we schedule PREROLL_SEC
+      // ahead to build a cushion that absorbs late chunks (network/inference jitter),
+      // which is what was starving the queue and cracking. Otherwise play gaplessly
+      // right after the previous chunk; the start time is never moved backward, so
+      // converted audio can never overlap/stack on itself.
       const now = playbackCtx.currentTime;
-      const startAt = Math.max(now + 0.03, nextPlayTime);
+      let startAt;
+      if (nextPlayTime <= now + 0.001) {
+        startAt = now + PREROLL_SEC;
+      } else {
+        startAt = nextPlayTime;
+      }
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
     } catch (_) {}
