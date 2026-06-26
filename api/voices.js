@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     // ── add_voice (admin) ──────────────────────────────────────────────────────
     if (action === 'add_voice') {
       if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
-      const { name, folderName, description, previewUrl, previewBase64, isPublic, isPremium, price } = body;
+      const { name, folderName, description, previewUrl, previewBase64, isPublic, isPremium, price, wokadaSlot } = body;
       if (!name || !folderName) return res.status(400).json({ error: 'Name and folderName required' });
 
       const voices = await getVoices();
@@ -104,6 +104,8 @@ export default async function handler(req, res) {
         isPublic: isPublic !== false,
         isPremium: !!isPremium,
         price: parseFloat(price) || 0,
+        // w-okada (Voice 2.0) slot index for this voice; null = not available on Voice 2.0
+        wokadaSlot: (wokadaSlot === undefined || wokadaSlot === null || wokadaSlot === '') ? null : parseInt(wokadaSlot, 10),
         createdAt: Date.now()
       };
 
@@ -122,9 +124,13 @@ export default async function handler(req, res) {
       const idx = voices.findIndex(v => v.id === id);
       if (idx === -1) return res.status(404).json({ error: 'Voice not found' });
 
-      const allowed = ['name', 'description', 'folderName', 'previewUrl', 'previewBase64', 'isPublic', 'isPremium', 'price'];
+      const allowed = ['name', 'description', 'folderName', 'previewUrl', 'previewBase64', 'isPublic', 'isPremium', 'price', 'wokadaSlot'];
       for (const key of allowed) {
-        if (body[key] !== undefined) voices[idx][key] = body[key];
+        if (body[key] !== undefined) {
+          voices[idx][key] = (key === 'wokadaSlot')
+            ? ((body[key] === null || body[key] === '') ? null : parseInt(body[key], 10))
+            : body[key];
+        }
       }
       voices[idx].updatedAt = Date.now();
 

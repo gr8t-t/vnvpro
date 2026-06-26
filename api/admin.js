@@ -8,6 +8,7 @@ const BANK_KEY = 'vnv_bank_details';
 const WALLETS_KEY = 'vnv_crypto_wallets';
 const SETTINGS_KEY = 'vnv_settings';
 const RVC_URL_KEY = 'vnv_rvc_url';
+const WOKADA_URL_KEY = 'vnv_wokada_url';   // Voice 2.0 (w-okada) server tunnel URL
 
 function coinKey(email) {
   return `vnv_coins:${email}`;
@@ -52,6 +53,24 @@ export default async function handler(req, res) {
         await redis.del(RVC_URL_KEY);
       } else {
         await redis.set(RVC_URL_KEY, url.trim());
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ── get_wokada_url (public) — Voice 2.0 engine URL ─────────────────────────
+    if (action === 'get_wokada_url') {
+      const url = await redis.get(WOKADA_URL_KEY);
+      return res.status(200).json({ url: url || '' });
+    }
+
+    // ── set_wokada_url (admin) ─────────────────────────────────────────────────
+    if (action === 'set_wokada_url') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { url } = body;
+      if (!url) {
+        await redis.del(WOKADA_URL_KEY);
+      } else {
+        await redis.set(WOKADA_URL_KEY, url.trim());
       }
       return res.status(200).json({ ok: true });
     }
