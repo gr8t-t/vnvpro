@@ -999,24 +999,26 @@ async function applyVideoSettings(initial) {
 
 // ─── AUDIO PIPELINE ────────────────────────────────────────────────────────────
 
-// Voice 2.0 — stream the mic to w-okada (via the RVC server's /v2 proxy, which
-// adds CORS and rides the same tunnel) and play the converted audio back.
-// Capture float32 @48k, POST ~0.5s chunks to /v2/convert, jitter-buffered playback.
-const V2_CHUNK = 24000;   // 0.5s @ 48k per request
+// Voice 2.0 — stream the mic to w-okada via the RVC server's /v2 proxy.
+// Bandwidth-optimised for the tunnel: send 16kHz int16 (the proxy expands to
+// 48k float32 for w-okada and shrinks the result back). Requests are PIPELINED
+// (sent concurrently, not one-at-a-time) so the tunnel's round-trip latency
+// overlaps instead of stacking; responses are played back in timestamp order
+// through the jitter buffer.
+const V2_RATE = 16000;
+const V2_CHUNK = 8000;    // 0.5s @ 16k per request
 async function startV2Pipeline(voice) {
   const base = rvcServerUrl.replace(/\/$/, '');
   if (voice.wokadaSlot === null || voice.wokadaSlot === undefined) {
     throw new Error('This voice is not set up for Voice 2.0 yet.');
   }
-  // 1) select the w-okada voice (model slot)
   const slotRes = await fetch(`${base}/v2/set_slot?slot=${voice.wokadaSlot}`, {
     method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
   }).catch(() => null);
   if (!slotRes || !slotRes.ok) throw new Error('Voice 2.0 engine not reachable. Try again.');
 
-  // 2) audio in/out at 48k
-  audioCtx = new AudioContext({ sampleRate: 48000 });
-  playbackCtx = new AudioContext({ sampleRate: 48000 });
+  audioCtx = new AudioContext({ sampleRate: V2_RATE });
+  playbackCtx = new AudioContext({ sampleRate: V2_RATE });
   nextPlayTime = 0;
   micStream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: true },
@@ -1031,43 +1033,53 @@ async function startV2Pipeline(voice) {
   if (statusEl) statusEl.textContent = `Voice 2.0 active: ${voice.name}`;
 
   let acc = new Float32Array(0);
-  let sentSamples = 0;          // cumulative -> x-timestamp for smooth stitching
+  let sentSamples = 0;          // cumulative ts (monotonic, for ordering + stitching)
+  let expectedTs = 0;           // next ts to play, so we play strictly in order
+  const outBuf = new Map();     // ts -> Float32Array (converted, awaiting its turn)
   let outputLevel = 0;
-  const pending = [];
-  let sending = false;
 
-  async function sendOne(chunk, ts) {
-    const res = await fetch(`${base}/v2/convert?ts=${ts}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
-      body: chunk.buffer
-    });
-    if (!res.ok || !isStreaming || !playbackCtx) return;
-    const f32 = new Float32Array(await res.arrayBuffer());
-    if (!f32.length) return;
+  function schedule(f32) {
+    if (!playbackCtx) return;
     let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i];
     outputLevel = Math.min(100, Math.sqrt(s / f32.length) * 300);
-    const buf = playbackCtx.createBuffer(1, f32.length, 48000);
-    buf.getChannelData(0).set(f32);
+    const b = playbackCtx.createBuffer(1, f32.length, V2_RATE);
+    b.getChannelData(0).set(f32);
     const src = playbackCtx.createBufferSource();
-    src.buffer = buf; src.connect(playbackCtx.destination);
+    src.buffer = b; src.connect(playbackCtx.destination);
     const now = playbackCtx.currentTime;
     const startAt = (nextPlayTime <= now + 0.001) ? now + PREROLL_SEC : nextPlayTime;
     src.start(startAt);
-    nextPlayTime = startAt + buf.duration;
+    nextPlayTime = startAt + b.duration;
   }
 
-  // Serialize requests (one in flight) so chunks play in order; if the network
-  // backs up, drop to the most recent chunk to keep latency bounded.
-  async function drain() {
-    if (sending) return;
-    sending = true;
-    while (isStreaming && pending.length) {
-      if (pending.length > 3) pending.splice(0, pending.length - 1);
-      const { chunk, ts } = pending.shift();
-      try { await sendOne(chunk, ts); } catch (_) {}
+  function flush() {
+    while (outBuf.has(expectedTs)) {
+      schedule(outBuf.get(expectedTs)); outBuf.delete(expectedTs); expectedTs += V2_CHUNK;
     }
-    sending = false;
+    // if the next chunk is missing/late but others have piled up, skip ahead
+    if (!outBuf.has(expectedTs) && outBuf.size > 3) {
+      const minTs = Math.min(...outBuf.keys());
+      if (minTs > expectedTs) expectedTs = minTs;
+      while (outBuf.has(expectedTs)) {
+        schedule(outBuf.get(expectedTs)); outBuf.delete(expectedTs); expectedTs += V2_CHUNK;
+      }
+    }
+  }
+
+  async function send(int16, ts) {
+    try {
+      const res = await fetch(`${base}/v2/convert?ts=${ts}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
+        body: int16.buffer
+      });
+      if (!res.ok || !isStreaming || !playbackCtx) return;
+      const i16 = new Int16Array(await res.arrayBuffer());
+      const f32 = new Float32Array(i16.length);
+      for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+      outBuf.set(ts, f32);
+      flush();
+    } catch (_) {}
   }
 
   processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -1078,11 +1090,13 @@ async function startV2Pipeline(voice) {
     merged.set(acc); merged.set(inb, acc.length);
     acc = merged;
     while (acc.length >= V2_CHUNK) {
-      pending.push({ chunk: acc.slice(0, V2_CHUNK), ts: sentSamples });
+      const chunk = acc.slice(0, V2_CHUNK);
       acc = acc.slice(V2_CHUNK);
+      const i16 = new Int16Array(chunk.length);
+      for (let i = 0; i < chunk.length; i++) i16[i] = Math.max(-32768, Math.min(32767, chunk[i] * 32768));
+      send(i16, sentSamples);     // pipelined: fire concurrently, don't await
       sentSamples += V2_CHUNK;
     }
-    drain();
   };
   source.connect(processor);
   processor.connect(audioCtx.destination);

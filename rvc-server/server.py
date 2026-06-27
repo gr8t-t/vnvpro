@@ -44,7 +44,7 @@ MODELS_DIR  = os.path.join(BASE_DIR, "models")
 DEVICE      = "cuda:0"          # set to "cpu" if no NVIDIA GPU
 OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
-WOKADA_URL  = "http://localhost:18000"   # local w-okada server (Voice 2.0 engine)
+WOKADA_URL  = "http://127.0.0.1:18000"   # local w-okada (Voice 2.0). 127.0.0.1 (not "localhost") avoids the ~2s IPv6-resolution stall in requests
 
 # Real-time tuning (seconds) — Voice 1.0 (Standard)
 BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
@@ -421,13 +421,23 @@ def v2_set_slot(slot: int):
 
 @app.post("/v2/convert")
 async def v2_convert(request: Request, ts: int = 0):
-    """Forward a raw float32 mono @48k audio chunk to w-okada convert_chunk and
-    return the converted float32 bytes. `ts` is a monotonic counter the client
-    increments per chunk so w-okada can stitch consecutive chunks smoothly."""
-    body = await request.body()
+    """Voice 2.0 chunk convert, bandwidth-optimised for the tunnel.
+
+    The browser sends int16 mono @16k (small). We upsample to float32 @48k for
+    w-okada's convert_chunk, then downsample its float32 @48k output back to
+    int16 @16k for the browser. 16k carries no quality loss for the conversion
+    (w-okada works at 16k internally); it just keeps the tunnel payload ~6x smaller.
+    `ts` is a monotonic counter so w-okada stitches consecutive chunks smoothly."""
+    raw = await request.body()
+    in16 = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    if len(in16) == 0:
+        return Response(content=b"", media_type="application/octet-stream")
+    # upsample 16k -> 48k (x3) for w-okada
+    up = np.interp(np.linspace(0, len(in16) - 1, len(in16) * 3),
+                   np.arange(len(in16)), in16).astype("<f4")
 
     def _do():
-        files = {"waveform": ("chunk.bin", body, "application/octet-stream")}
+        files = {"waveform": ("chunk.bin", up.tobytes(), "application/octet-stream")}
         return requests.post(f"{WOKADA_URL}/api/voice-changer/convert_chunk",
                              files=files, headers={"x-timestamp": str(ts)}, timeout=30)
 
@@ -437,7 +447,15 @@ async def v2_convert(request: Request, ts: int = 0):
         return JSONResponse(status_code=502, content={"error": "w-okada unreachable", "detail": str(e)})
     if r.status_code != 200:
         return JSONResponse(status_code=502, content={"error": "convert failed", "detail": r.text[:200]})
-    return Response(content=r.content, media_type="application/octet-stream")
+
+    out48 = np.frombuffer(r.content, dtype="<f4")
+    if len(out48) == 0:
+        return Response(content=b"", media_type="application/octet-stream")
+    # downsample 48k -> 16k (/3) and pack int16 for the browser
+    idx = np.linspace(0, len(out48) - 1, max(1, len(out48) // 3))
+    out16 = np.interp(idx, np.arange(len(out48)), out48)
+    out16i = np.clip(out16 * 32768.0, -32768, 32767).astype("<i2")
+    return Response(content=out16i.tobytes(), media_type="application/octet-stream")
 
 
 if __name__ == "__main__":
