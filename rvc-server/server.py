@@ -31,6 +31,7 @@ import tempfile
 import threading
 import numpy as np
 import requests
+import soxr   # high-quality, anti-aliased resampling for the Voice 2.0 proxy
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -432,9 +433,8 @@ async def v2_convert(request: Request, ts: int = 0):
     in16 = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
     if len(in16) == 0:
         return Response(content=b"", media_type="application/octet-stream")
-    # upsample 16k -> 48k (x3) for w-okada
-    up = np.interp(np.linspace(0, len(in16) - 1, len(in16) * 3),
-                   np.arange(len(in16)), in16).astype("<f4")
+    # upsample 16k -> 48k for w-okada (soxr = anti-aliased, clean)
+    up = soxr.resample(in16, 16000, 48000).astype("<f4")
 
     def _do():
         files = {"waveform": ("chunk.bin", up.tobytes(), "application/octet-stream")}
@@ -451,9 +451,8 @@ async def v2_convert(request: Request, ts: int = 0):
     out48 = np.frombuffer(r.content, dtype="<f4")
     if len(out48) == 0:
         return Response(content=b"", media_type="application/octet-stream")
-    # downsample 48k -> 16k (/3) and pack int16 for the browser
-    idx = np.linspace(0, len(out48) - 1, max(1, len(out48) // 3))
-    out16 = np.interp(idx, np.arange(len(out48)), out48)
+    # downsample 48k -> 16k for the browser (soxr = anti-aliased, no muddy artifacts)
+    out16 = soxr.resample(out48, 48000, 16000)
     out16i = np.clip(out16 * 32768.0, -32768, 32767).astype("<i2")
     return Response(content=out16i.tobytes(), media_type="application/octet-stream")
 
