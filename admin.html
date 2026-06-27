@@ -508,6 +508,10 @@
         <input type="text" class="form-input" id="vFolder" placeholder="e.g. morgan_freeman">
       </div>
       <div class="form-group">
+        <label class="form-label">Voice 2.0 (w-okada) slot # — leave blank if not on Voice 2.0</label>
+        <input type="number" class="form-input" id="vWokadaSlot" min="0" placeholder="e.g. 5">
+      </div>
+      <div class="form-group">
         <label class="form-label">Description</label>
         <input type="text" class="form-input" id="vDesc" placeholder="Deep, calm voice">
       </div>
@@ -772,6 +776,7 @@
       document.getElementById('editVoiceId').value = '';
       document.getElementById('vName').value = '';
       document.getElementById('vFolder').value = '';
+      document.getElementById('vWokadaSlot').value = '';
       document.getElementById('vDesc').value = '';
       document.getElementById('vPreviewUrl').value = '';
       document.getElementById('vIsPublic').checked = true;
@@ -787,6 +792,7 @@
       document.getElementById('editVoiceId').value = v.id;
       document.getElementById('vName').value = v.name || '';
       document.getElementById('vFolder').value = v.folderName || '';
+      document.getElementById('vWokadaSlot').value = (v.wokadaSlot === null || v.wokadaSlot === undefined) ? '' : v.wokadaSlot;
       document.getElementById('vDesc').value = v.description || '';
       document.getElementById('vPreviewUrl').value = v.previewUrl || '';
       document.getElementById('vIsPublic').checked = !!v.isPublic;
@@ -809,6 +815,8 @@
       const isPublic = document.getElementById('vIsPublic').checked;
       const isPremium = document.getElementById('vIsPremium').checked;
       const price = parseFloat(document.getElementById('vPrice').value) || 0;
+      const wokadaSlotRaw = document.getElementById('vWokadaSlot').value.trim();
+      const wokadaSlot = wokadaSlotRaw === '' ? null : parseInt(wokadaSlotRaw, 10);
 
       if (!name || !folderName) { showToast('Name and folder name required.', 'error'); return; }
 
@@ -820,7 +828,7 @@
       }
 
       const action = id ? 'update_voice' : 'add_voice';
-      const body = { action, name, folderName, description, previewUrl, isPublic, isPremium, price };
+      const body = { action, name, folderName, description, previewUrl, isPublic, isPremium, price, wokadaSlot };
       if (id) body.id = id;
       if (previewBase64) body.previewBase64 = previewBase64;
 

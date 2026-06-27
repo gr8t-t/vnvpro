@@ -663,8 +663,8 @@ async function startStream() {
     return;
   }
 
-  if ((mode === 'audio' || mode === 'both') && engine === 'v1' && !rvcServerUrl) {
-    showToast('RVC server URL not configured. Contact support.', 'error');
+  if ((mode === 'audio' || mode === 'both') && !rvcServerUrl) {
+    showToast('Voice server URL not configured. Contact support.', 'error');
     return;
   }
 
@@ -676,8 +676,14 @@ async function startStream() {
         showToast('High demand right now — please wait a moment and try again, or switch to Voice 2.0.', 'error', 5000);
         return;
       }
+    } else { // Voice 2.0 — single w-okada engine: needs a slot + must claim the slot
+      if (selectedVoice.wokadaSlot === null || selectedVoice.wokadaSlot === undefined) {
+        showToast('This voice isn\'t available on Voice 2.0 yet. Pick another or use Voice 1.0.', 'error', 5000);
+        return;
+      }
+      const got = await acquireVoice2();
+      if (!got) { showToast('Voice 2.0 is in use right now — please try again shortly.', 'info', 5000); return; }
     }
-    // Voice 2.0 runs on the user's own device via w-okada — no server slot needed
   }
 
   setStatus('Connecting...', false);
@@ -993,13 +999,27 @@ async function applyVideoSettings(initial) {
 
 // ─── AUDIO PIPELINE ────────────────────────────────────────────────────────────
 
-// Voice 2.0 — w-okada runs on the user's own GPU via virtual audio cable.
-// The browser just monitors mic level for the meter; no server WebSocket needed.
-async function startV2AudioMonitor() {
-  audioCtx = new AudioContext({ sampleRate: 16000 });
-  playbackCtx = null;
+// Voice 2.0 — stream the mic to w-okada (via the RVC server's /v2 proxy, which
+// adds CORS and rides the same tunnel) and play the converted audio back.
+// Capture float32 @48k, POST ~0.5s chunks to /v2/convert, jitter-buffered playback.
+const V2_CHUNK = 24000;   // 0.5s @ 48k per request
+async function startV2Pipeline(voice) {
+  const base = rvcServerUrl.replace(/\/$/, '');
+  if (voice.wokadaSlot === null || voice.wokadaSlot === undefined) {
+    throw new Error('This voice is not set up for Voice 2.0 yet.');
+  }
+  // 1) select the w-okada voice (model slot)
+  const slotRes = await fetch(`${base}/v2/set_slot?slot=${voice.wokadaSlot}`, {
+    method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
+  }).catch(() => null);
+  if (!slotRes || !slotRes.ok) throw new Error('Voice 2.0 engine not reachable. Try again.');
+
+  // 2) audio in/out at 48k
+  audioCtx = new AudioContext({ sampleRate: 48000 });
+  playbackCtx = new AudioContext({ sampleRate: 48000 });
+  nextPlayTime = 0;
   micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: false },
+    audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: true },
     video: false
   });
   const source = audioCtx.createMediaStreamSource(micStream);
@@ -1008,25 +1028,83 @@ async function startV2AudioMonitor() {
   source.connect(analyser);
 
   const statusEl = document.getElementById('voiceStatusText');
-  if (statusEl) statusEl.textContent = 'Voice 2.0 Active — w-okada running on your device';
+  if (statusEl) statusEl.textContent = `Voice 2.0 active: ${voice.name}`;
 
+  let acc = new Float32Array(0);
+  let sentSamples = 0;          // cumulative -> x-timestamp for smooth stitching
+  let outputLevel = 0;
+  const pending = [];
+  let sending = false;
+
+  async function sendOne(chunk, ts) {
+    const res = await fetch(`${base}/v2/convert?ts=${ts}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
+      body: chunk.buffer
+    });
+    if (!res.ok || !isStreaming || !playbackCtx) return;
+    const f32 = new Float32Array(await res.arrayBuffer());
+    if (!f32.length) return;
+    let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i];
+    outputLevel = Math.min(100, Math.sqrt(s / f32.length) * 300);
+    const buf = playbackCtx.createBuffer(1, f32.length, 48000);
+    buf.getChannelData(0).set(f32);
+    const src = playbackCtx.createBufferSource();
+    src.buffer = buf; src.connect(playbackCtx.destination);
+    const now = playbackCtx.currentTime;
+    const startAt = (nextPlayTime <= now + 0.001) ? now + PREROLL_SEC : nextPlayTime;
+    src.start(startAt);
+    nextPlayTime = startAt + buf.duration;
+  }
+
+  // Serialize requests (one in flight) so chunks play in order; if the network
+  // backs up, drop to the most recent chunk to keep latency bounded.
+  async function drain() {
+    if (sending) return;
+    sending = true;
+    while (isStreaming && pending.length) {
+      if (pending.length > 3) pending.splice(0, pending.length - 1);
+      const { chunk, ts } = pending.shift();
+      try { await sendOne(chunk, ts); } catch (_) {}
+    }
+    sending = false;
+  }
+
+  processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  processor.onaudioprocess = (e) => {
+    if (!isStreaming) return;
+    const inb = e.inputBuffer.getChannelData(0);
+    const merged = new Float32Array(acc.length + inb.length);
+    merged.set(acc); merged.set(inb, acc.length);
+    acc = merged;
+    while (acc.length >= V2_CHUNK) {
+      pending.push({ chunk: acc.slice(0, V2_CHUNK), ts: sentSamples });
+      acc = acc.slice(V2_CHUNK);
+      sentSamples += V2_CHUNK;
+    }
+    drain();
+  };
+  source.connect(processor);
+  processor.connect(audioCtx.destination);
+
+  // level meters
   const dataArray = new Uint8Array(analyser.frequencyBinCount);
   micLevelInterval = setInterval(() => {
     if (!analyser) return;
     analyser.getByteTimeDomainData(dataArray);
     let sum = 0;
-    for (let i = 0; i < dataArray.length; i++) {
-      const v = (dataArray[i] - 128) / 128;
-      sum += v * v;
-    }
+    for (let i = 0; i < dataArray.length; i++) { const v = (dataArray[i] - 128) / 128; sum += v * v; }
     document.getElementById('micLevel').style.height = Math.min(100, Math.sqrt(sum / dataArray.length) * 400) + '%';
+    const spk = document.getElementById('spkLevel');
+    if (spk) spk.style.height = outputLevel + '%';
+    outputLevel *= 0.85;
   }, 50);
 }
 
 async function startAudioPipeline(voice) {
-  // Voice 2.0 — no server needed; w-okada handles conversion on user's device
+  // Voice 2.0 — stream to w-okada via the RVC server's /v2 proxy
   if (engine === 'v2') {
-    await startV2AudioMonitor();
+    await startV2Pipeline(voice);
     return;
   }
 
@@ -1196,9 +1274,9 @@ function setEngine(e) {
   v2.classList.toggle('btn-primary', e === 'v2');
   v2.classList.toggle('btn-secondary', e !== 'v2');
   if (hintText) hintText.textContent = e === 'v2'
-    ? 'Premium — ultra-low latency, runs on YOUR device GPU via w-okada. One-time setup required.'
-    : 'Standard — powered by our server. Always available.';
-  if (guideBtn) guideBtn.style.display = e === 'v2' ? '' : 'none';
+    ? 'Premium — smoother, more natural voice. One person at a time; costs more coins.'
+    : 'Standard — always available.';
+  if (guideBtn) guideBtn.style.display = 'none';   // Voice 2.0 is server-side now; no user setup
 }
 
 function openV2Guide() {
@@ -1216,15 +1294,12 @@ async function voice2Api(action) {
   return res.json();
 }
 
-// Returns true if the Voice 2.0 slot is ours (start now); false if queued (waitlist shown)
+// Returns true if the Voice 2.0 slot is ours (start now); false if busy.
 async function acquireVoice2() {
   try {
     const r = await voice2Api('v2_acquire');
-    if (r.ok && r.state === 'active') return true;
-    showWaitlist(r);
-    return false;
+    return !!(r.ok && r.state === 'active');
   } catch (_) {
-    showToast('Could not reach the premium queue. Try Voice 1.0.', 'error');
     return false;
   }
 }
@@ -1243,8 +1318,12 @@ function startEngineHeartbeat() {
   if (engine === 'v1') {
     voice2Api('v1_heartbeat').catch(() => {});
     v1HeartbeatInterval = setInterval(() => { voice2Api('v1_heartbeat').catch(() => {}); }, 10000);
+  } else { // Voice 2.0 — hold the single w-okada slot while streaming
+    v2HeartbeatInterval = setInterval(async () => {
+      try { const r = await voice2Api('v2_heartbeat'); if (r && r.lost) { showToast('Voice 2.0 session ended.', 'info'); stopStream(); } }
+      catch (_) {}
+    }, 10000);
   }
-  // Voice 2.0 runs on user's device — no server heartbeat needed
 }
 
 function stopEngineHeartbeat() {

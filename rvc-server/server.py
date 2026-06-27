@@ -30,8 +30,9 @@ import wave
 import tempfile
 import threading
 import numpy as np
+import requests
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import uvicorn
@@ -43,6 +44,7 @@ MODELS_DIR  = os.path.join(BASE_DIR, "models")
 DEVICE      = "cuda:0"          # set to "cpu" if no NVIDIA GPU
 OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
+WOKADA_URL  = "http://localhost:18000"   # local w-okada server (Voice 2.0 engine)
 
 # Real-time tuning (seconds) — Voice 1.0 (Standard)
 BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
@@ -388,6 +390,54 @@ async def voice_ws2(websocket: WebSocket, voice_folder: str):
             await websocket.close()
         except Exception:
             pass
+
+
+# ── Voice 2.0 proxy → local w-okada server ────────────────────────────────────
+# The browser can't call w-okada directly (it sends no CORS headers). This server
+# DOES have CORS (allow_origins=*), so vnvpro hits these /v2 endpoints on the SAME
+# tunnel and we forward to w-okada on localhost. Keeps Voice 1.0 + 2.0 on one tunnel.
+
+@app.get("/v2/health")
+def v2_health():
+    """Is the w-okada (Voice 2.0) engine up?"""
+    try:
+        r = requests.get(f"{WOKADA_URL}/api/hello", timeout=5)
+        return {"ok": r.status_code == 200}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"ok": False, "error": str(e)})
+
+
+@app.post("/v2/set_slot")
+def v2_set_slot(slot: int):
+    """Select which w-okada voice (model slot) to convert with."""
+    try:
+        cfg = requests.get(f"{WOKADA_URL}/api/configuration-manager/configuration", timeout=10).json()
+        cfg["current_slot_index"] = int(slot)
+        r = requests.put(f"{WOKADA_URL}/api/configuration-manager/configuration", json=cfg, timeout=15)
+        return {"ok": r.status_code == 200, "slot": int(slot)}
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"ok": False, "error": str(e)})
+
+
+@app.post("/v2/convert")
+async def v2_convert(request: Request, ts: int = 0):
+    """Forward a raw float32 mono @48k audio chunk to w-okada convert_chunk and
+    return the converted float32 bytes. `ts` is a monotonic counter the client
+    increments per chunk so w-okada can stitch consecutive chunks smoothly."""
+    body = await request.body()
+
+    def _do():
+        files = {"waveform": ("chunk.bin", body, "application/octet-stream")}
+        return requests.post(f"{WOKADA_URL}/api/voice-changer/convert_chunk",
+                             files=files, headers={"x-timestamp": str(ts)}, timeout=30)
+
+    try:
+        r = await asyncio.get_event_loop().run_in_executor(None, _do)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": "w-okada unreachable", "detail": str(e)})
+    if r.status_code != 200:
+        return JSONResponse(status_code=502, content={"error": "convert failed", "detail": r.text[:200]})
+    return Response(content=r.content, media_type="application/octet-stream")
 
 
 if __name__ == "__main__":
