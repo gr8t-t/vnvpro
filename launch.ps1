@@ -20,7 +20,7 @@ $WokadaPort    = 18000
 # e.g.  tough-cat-1234.ngrok-free.app   (NO https://, no slash).
 # Get it once at https://dashboard.ngrok.com/domains  then paste here.
 # Leave it as '' to fall back to a random URL.
-$NgrokDomain   = ''
+$NgrokDomain   = 'exerciser-overvalue-stoppable.ngrok-free.dev'
 # -------------------------------------------------------------
 
 $NgrokDomain = $NgrokDomain.Trim()
