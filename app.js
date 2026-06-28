@@ -803,6 +803,11 @@ function setStatus(text, live) {
 // Buffers Decart output frames as ImageBitmaps and renders the frame from
 // videoDelayMs ago, so slow audio (RVC) lines up with the mouth on screen.
 
+// Hard ceiling on buffered frames (backstop vs. runaway GPU memory). At the
+// 5000ms max + 400ms headroom and ~30fps capture, normal use stays ~162 frames;
+// 200 gives margin without ever interfering with the time-based eviction.
+const MAX_DELAY_FRAMES = 200;
+
 function setVideoDelay(ms) {
   videoDelayMs = ms;
   const label = document.getElementById('delayLabel');
@@ -848,6 +853,11 @@ function startVideoDelay() {
       // Evict frames older than delay + 400ms headroom, freeing GPU memory
       const cutoff = performance.now() - videoDelayMs - 400;
       while (frameBuffer.length > 1 && frameBuffer[0].time < cutoff) {
+        frameBuffer[0].bmp.close();
+        frameBuffer.shift();
+      }
+      // Safety cap: never hold more than MAX_DELAY_FRAMES (backstop vs. runaway memory)
+      while (frameBuffer.length > MAX_DELAY_FRAMES) {
         frameBuffer[0].bmp.close();
         frameBuffer.shift();
       }
