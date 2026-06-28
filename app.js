@@ -13,6 +13,8 @@ let v2HeartbeatInterval = null;
 let v1HeartbeatInterval = null;
 let waitPollInterval = null;
 let rvcServerUrl = null;
+let enginesOnline = { v1: true, v2: true };   // updated by health polling; greys engines when servers are off
+let engineHealthInterval = null;
 let audioCtx = null;
 let playbackCtx = null;
 let nextPlayTime = 0;
@@ -645,6 +647,10 @@ function setMode(m) {
     voicePanel.style.display = 'none';
     appColumns.classList.add('single-col');
   }
+
+  // Health-poll the voice engines only while a voice mode is active (saves ngrok requests)
+  if (m === 'audio' || m === 'both') startEngineHealthPoll();
+  else stopEngineHealthPoll();
 }
 
 // ─── STREAM CONTROL ────────────────────────────────────────────────────────────
@@ -665,6 +671,11 @@ async function startStream() {
 
   if ((mode === 'audio' || mode === 'both') && !rvcServerUrl) {
     showToast('Voice server URL not configured. Contact support.', 'error');
+    return;
+  }
+
+  if ((mode === 'audio' || mode === 'both') && !enginesOnline[engine]) {
+    showToast(`Voice ${engine === 'v2' ? '2.0' : '1.0'} is offline right now. Please try again in a moment.`, 'error', 5000);
     return;
   }
 
@@ -1353,6 +1364,66 @@ function startEngineHeartbeat() {
 function stopEngineHeartbeat() {
   if (v2HeartbeatInterval) { clearInterval(v2HeartbeatInterval); v2HeartbeatInterval = null; voice2Api('v2_release').catch(() => {}); }
   if (v1HeartbeatInterval) { clearInterval(v1HeartbeatInterval); v1HeartbeatInterval = null; voice2Api('v1_stop').catch(() => {}); }
+}
+
+// ─── ENGINE AVAILABILITY (grey out when the host laptop/servers are offline) ───
+// Polls the RVC server's health endpoints (only while in a voice mode, to spare
+// the ngrok request budget). /health = Voice 1.0 (RVC) up; /v2/health = Voice 2.0
+// (w-okada) reachable. When the laptop is off the tunnel is dead → both go grey;
+// they light back up on their own once the servers are running again.
+async function pingHealth(path) {
+  if (!rvcServerUrl) return false;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(rvcServerUrl.replace(/\/+$/, '') + path, {
+      headers: { 'ngrok-skip-browser-warning': 'true' },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const data = await res.json().catch(() => ({}));
+    if (path === '/v2/health') return data.ok === true;   // w-okada reachable
+    return data.status === 'ok';                           // RVC server up
+  } catch (_) {
+    return false;   // network error / timeout / tunnel down
+  }
+}
+
+async function checkEnginesHealth() {
+  if (!rvcServerUrl) { enginesOnline = { v1: false, v2: false }; applyEngineAvailability(); return; }
+  const [v1, v2] = await Promise.all([pingHealth('/health'), pingHealth('/v2/health')]);
+  enginesOnline = { v1, v2 };
+  applyEngineAvailability();
+}
+
+function applyEngineAvailability() {
+  const map = [['v1', 'engineV1Btn', 'engStatusV1', 'Voice 1.0'], ['v2', 'engineV2Btn', 'engStatusV2', 'Voice 2.0']];
+  for (const [key, btnId, statId, label] of map) {
+    const on = !!enginesOnline[key];
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.disabled = !on;
+      btn.style.opacity = on ? '' : '0.4';
+      btn.style.filter  = on ? '' : 'grayscale(1)';
+      btn.style.cursor  = on ? '' : 'not-allowed';
+      btn.title = on ? '' : `${label} is offline right now (host laptop/servers are off).`;
+    }
+    const stat = document.getElementById(statId);
+    if (stat) {
+      const color = on ? '#36d399' : '#9aa0a6';
+      stat.innerHTML = `<span style="color:${color};">●</span> ${label}: ${on ? 'online' : 'offline'}`;
+    }
+  }
+}
+
+function startEngineHealthPoll() {
+  stopEngineHealthPoll();
+  checkEnginesHealth();
+  engineHealthInterval = setInterval(checkEnginesHealth, 30000);
+}
+function stopEngineHealthPoll() {
+  if (engineHealthInterval) { clearInterval(engineHealthInterval); engineHealthInterval = null; }
 }
 
 // (Voice 2.0 waitlist removed — w-okada runs on user's own device, no shared slot needed)

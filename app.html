@@ -661,6 +661,10 @@
             <button type="button" id="engineV1Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v1')">Voice 1.0</button>
             <button type="button" id="engineV2Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v2')">Voice 2.0 ✦</button>
           </div>
+          <div id="engineStatus" style="padding:6px 12px 2px; font-size:10px; display:flex; gap:14px; color:var(--text2); border-bottom:1px solid var(--border);">
+            <span id="engStatusV1">Voice 1.0: checking…</span>
+            <span id="engStatusV2">Voice 2.0: checking…</span>
+          </div>
           <div id="engineHint" style="padding:8px 12px; font-size:11px; color:var(--text2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px;">
             <span id="engineHintText">Standard — powered by our server. Always available.</span>
             <button id="v2GuideBtn" class="btn btn-ghost btn-sm" style="display:none; font-size:10px; white-space:nowrap; padding:3px 9px;" onclick="openV2Guide()">Setup Guide</button>
