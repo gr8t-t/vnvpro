@@ -628,6 +628,12 @@
   <main class="app-main">
     <div class="app-content">
 
+      <!-- Setup Mode banner (prominent, shown only while Setup Mode is active) -->
+      <div id="setupBanner" style="display:none; align-items:center; gap:10px; background:#f59e0b; color:#1a1a1a; border-radius:10px; padding:11px 15px; margin-bottom:14px; font-size:13px; font-weight:600;">
+        <span style="font-size:18px;">🛠</span>
+        <span>SETUP MODE — free test. No coins are charged. Your AI Output shows your uploaded image, not live AI video. Switch “Setup Mode” off to go live.</span>
+      </div>
+
       <!-- Mode selector -->
       <div class="mode-selector" id="modeSelector">
         <button class="mode-btn active" id="modeVideoBtn" onclick="setMode('video')">

@@ -752,7 +752,7 @@ async function startStream() {
     document.getElementById('stopBtn').disabled = false;
     document.getElementById('modeSelector').style.opacity = '0.5';
     document.getElementById('modeSelector').style.pointerEvents = 'none';
-    setStatus('LIVE', true);
+    setStatus(setupActive ? 'SETUP · free' : 'LIVE', true);
     lastBilledSeconds = 0;
     audioBillingSeconds = 0;
 
@@ -1065,6 +1065,8 @@ function updateSetupUI() {
     btn.style.borderColor = setupActive ? '#f59e0b' : '';
   }
   if (badge) badge.style.display = setupActive ? '' : 'none';
+  const banner = document.getElementById('setupBanner');
+  if (banner) banner.style.display = setupActive ? 'flex' : 'none';
 }
 
 function toggleSetupMode() {
