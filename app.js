@@ -29,6 +29,10 @@ let currentEmail = null;
 let coinBalance = 0;
 let realtimeClient = null;
 let referenceFile = null;
+let setupAllowed = false;        // admin permits Setup Mode for this user (from balance)
+let setupActive = false;         // user has Setup Mode toggled on (free, no Decart, no coins)
+let setupCanvasStream = null;    // image-as-video stream fed into the SAME output surface as Decart
+let setupDrawInterval = null;
 let settingsApplied = false;
 let isStreaming = false;
 let audioBillingInterval = null;
@@ -65,6 +69,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Heartbeat
   setInterval(() => sendHeartbeat(), 30000);
   sendHeartbeat();
+
+  // Refresh balance + Setup-Mode availability periodically so an admin revoke
+  // takes effect within ~30s without the user needing to reload.
+  setInterval(() => loadBalance(), 30000);
 
   // Load everything in parallel
   await Promise.all([
@@ -325,6 +333,31 @@ async function onRecStopped() {
   document.getElementById('recReview').style.display = 'block';
 }
 
+// Upload an existing audio file (instead of recording) and run it through the
+// same convert → MP3 path as a live recording.
+async function recUploadFile(file) {
+  if (!file) return;
+  if (!selectedVoice) { showToast('Select a voice first (close this and pick one).', 'error'); return; }
+  const okType = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(file.name);
+  if (!okType) { showToast('Please choose an audio file (MP3, WAV, M4A…).', 'error'); return; }
+  try {
+    const ctx = new AudioContext();
+    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
+    await ctx.close();
+    if (buf.duration > REC_MAX_SEC) { showToast(`Max ${REC_MAX_SEC}s — please trim the file and try again.`, 'error'); return; }
+    window._recAudioBuffer = buf;
+    recordedDuration = buf.duration;
+  } catch (_) {
+    showToast('Could not read that audio file. Try MP3 or WAV.', 'error');
+    return;
+  }
+  document.getElementById('recOriginalAudio').src = URL.createObjectURL(file);
+  document.getElementById('recCost').textContent = Math.ceil(recordedDuration * 0.3);
+  document.getElementById('recTimer').textContent = fmtTime(recordedDuration);
+  document.getElementById('recResult').style.display = 'none';
+  document.getElementById('recReview').style.display = 'block';
+}
+
 // Build a 16kHz mono 16-bit WAV blob from an AudioBuffer
 function audioBufferToWav(buf, targetSR = 16000) {
   const src = buf.getChannelData(0);
@@ -465,6 +498,8 @@ async function loadBalance() {
     });
     const data = await res.json();
     updateCoinDisplay(data.balance ?? 0);
+    setupAllowed = data.setupMode !== false;
+    applySetupAvailability();
   } catch (_) {}
 }
 
@@ -657,8 +692,8 @@ function setMode(m) {
 async function startStream() {
   if (isStreaming) return;
 
-  // Validate
-  if (coinBalance <= 0) {
+  // Validate (Setup Mode is free, so a 0-coin user is still allowed)
+  if (!setupActive && coinBalance <= 0) {
     showToast('You have no coins. Please buy coins to continue.', 'error');
     openBuyCoins();
     return;
@@ -702,11 +737,12 @@ async function startStream() {
 
   try {
     if (mode === 'video' || mode === 'both') {
-      await startVideoStream();
+      if (setupActive) await startSetupVideo();   // show uploaded image, no Decart
+      else await startVideoStream();
     }
     if (mode === 'audio' || mode === 'both') {
       await startAudioPipeline(selectedVoice);
-      if (mode === 'audio') {
+      if (mode === 'audio' && !setupActive) {
         startAudioBilling();
       }
     }
@@ -786,6 +822,7 @@ function stopStream() {
 
   // Stop video
   stopVideoStream();
+  stopSetupVideo();
 
   // Reset UI
   document.getElementById('startBtn').disabled = false;
@@ -994,6 +1031,89 @@ function stopVideoStream() {
   document.getElementById('outputPlaceholder').style.display = 'flex';
   window.aiOutputStream = null;
   settingsApplied = false;
+}
+
+// ─── SETUP MODE ────────────────────────────────────────────────────────────────
+// Free, admin-gated mode for first-time users to practise their OBS / WhatsApp
+// setup without burning Decart or coins. It paints the user's uploaded reference
+// image (or a placeholder) into a canvas and streams it into the SAME output
+// surface Decart uses (outputVideo + window.aiOutputStream) — so the popout/OBS
+// source is identical to live mode and needs no re-setup when they go live.
+// Voice still runs (free). Admin disables it per-user once setup is confirmed.
+const SETUP_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' width='1280' height='720'>" +
+  "<rect width='1280' height='720' fill='black'/>" +
+  "<text x='640' y='342' fill='white' font-family='Arial' font-size='54' font-weight='bold' text-anchor='middle'>SETUP MODE</text>" +
+  "<text x='640' y='404' fill='rgb(160,160,160)' font-family='Arial' font-size='26' text-anchor='middle'>Upload a reference image to preview it here</text>" +
+  "</svg>"
+);
+
+function applySetupAvailability() {
+  const btn = document.getElementById('setupModeBtn');
+  if (btn) btn.style.display = setupAllowed ? '' : 'none';
+  if (!setupAllowed && setupActive && !isStreaming) setupActive = false;
+  updateSetupUI();
+}
+
+function updateSetupUI() {
+  const btn = document.getElementById('setupModeBtn');
+  const badge = document.getElementById('setupBadge');
+  if (btn) {
+    btn.textContent = setupActive ? '🛠 Setup: ON' : '🛠 Setup Mode';
+    btn.style.background = setupActive ? '#f59e0b' : '';
+    btn.style.color = setupActive ? '#1a1a1a' : '';
+    btn.style.borderColor = setupActive ? '#f59e0b' : '';
+  }
+  if (badge) badge.style.display = setupActive ? '' : 'none';
+}
+
+function toggleSetupMode() {
+  if (isStreaming) { showToast('Stop before toggling Setup Mode.', 'error'); return; }
+  if (!setupAllowed) { showToast("Setup Mode isn't available for your account.", 'info'); return; }
+  setupActive = !setupActive;
+  updateSetupUI();
+  showToast(setupActive
+    ? 'Setup Mode ON — free preview, no coins charged.'
+    : 'Setup Mode off — normal (paid) streaming.', setupActive ? 'success' : 'info');
+}
+
+async function startSetupVideo() {
+  const outputVideo = document.getElementById('outputVideo');
+  const canvas = document.createElement('canvas');
+  canvas.width = 1280; canvas.height = 720;
+  const ctx = canvas.getContext('2d');
+
+  const src = referenceFile ? URL.createObjectURL(referenceFile) : SETUP_PLACEHOLDER;
+  const img = new Image();
+  await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; img.src = src; });
+
+  // Stretch the image to fill the 16:9 frame (fills the screen in fullscreen)
+  const draw = () => {
+    try { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(img, 0, 0, canvas.width, canvas.height); } catch (_) {}
+  };
+  draw();
+  setupDrawInterval = setInterval(draw, 100);   // keep the captured stream live
+  if (src.startsWith('blob:')) { try { URL.revokeObjectURL(src); } catch (_) {} }
+
+  setupCanvasStream = canvas.captureStream(15);
+  outputVideo.srcObject = setupCanvasStream;
+  outputVideo.style.display = 'block';
+  document.getElementById('outputCanvas').style.display = 'none';
+  document.getElementById('outputPlaceholder').style.display = 'none';
+  window.aiOutputStream = setupCanvasStream;   // identical surface to live Decart → OBS unchanged
+}
+
+function stopSetupVideo() {
+  if (setupDrawInterval) { clearInterval(setupDrawInterval); setupDrawInterval = null; }
+  if (setupCanvasStream) {
+    if (window.aiOutputStream === setupCanvasStream) window.aiOutputStream = null;
+    try { setupCanvasStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+    setupCanvasStream = null;
+    const outputVideo = document.getElementById('outputVideo');
+    if (outputVideo) { outputVideo.srcObject = null; outputVideo.style.display = 'none'; }
+    const ph = document.getElementById('outputPlaceholder');
+    if (ph) ph.style.display = 'flex';
+  }
 }
 
 async function applyVideoSettings(initial) {
@@ -1279,6 +1399,7 @@ function billMode() {
 }
 
 async function drainCoins(seconds, modeOverride) {
+  if (setupActive) return;   // Setup Mode is free — never deduct coins
   const m = modeOverride || mode;
   try {
     const res = await fetch('/api/coins', {

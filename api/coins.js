@@ -6,6 +6,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '09130370801Maviegr8@';
 const RATES_KEY = 'vnv_drain_rates';
 const PACKAGES_KEY = 'vnv_coin_packages';
 const PENDING_TOPUPS_KEY = 'vnv_pending_topups';
+const USERS_KEY = 'vnv_users';
 
 const DEFAULT_RATES = { video: 2.0, audio: 0.5, both: 2.5, record: 0.3, audio2: 1.0, both2: 3.5 };
 
@@ -59,7 +60,16 @@ export default async function handler(req, res) {
     if (action === 'balance') {
       if (!email) return res.status(400).json({ error: 'Missing email' });
       const bal = await getBalance(email);
-      return res.status(200).json({ balance: bal });
+      // Setup Mode availability: default ON for new users; admin can disable per-user
+      // (stored as setupMode:false on the user record in vnv_users).
+      let setupMode = true;
+      try {
+        const raw = await redis.get(USERS_KEY);
+        const users = raw ? JSON.parse(raw) : [];
+        const u = users.find(x => x.email === email);
+        if (u && u.setupMode === false) setupMode = false;
+      } catch (_) {}
+      return res.status(200).json({ balance: bal, setupMode });
     }
 
     // ── drain ──────────────────────────────────────────────────────────────────

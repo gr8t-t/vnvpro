@@ -691,17 +691,27 @@
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:24px;">No users yet.</td></tr>';
         return;
       }
-      tbody.innerHTML = users.map(u => `
+      tbody.innerHTML = users.map(u => {
+        const setupOn = u.setupMode !== false;   // default ON for new users
+        return `
         <tr>
           <td>${escHtml(u.email)}</td>
           <td><code style="font-size:11px;color:var(--accent2);">${escHtml(u.accessCode || '—')}</code></td>
           <td id="coins-${escHtml(u.email)}">${(u.coins || 0).toLocaleString()}</td>
           <td><span class="badge ${u.active ? 'badge-green' : 'badge-gray'}">${u.active ? 'Active' : 'Inactive'}</span></td>
           <td>
+            <button class="btn btn-sm" onclick="toggleUserSetup('${escHtml(u.email)}', ${!setupOn})" title="Setup Mode = free test mode (image output, no Decart, no coins). Turn OFF once this user's setup is confirmed working." style="${setupOn ? 'background:#f59e0b;color:#1a1a1a;border-color:#f59e0b;' : ''}">🛠 Setup: ${setupOn ? 'ON' : 'OFF'}</button>
             <button class="btn btn-ghost btn-sm" onclick="openGrantCoins('${escHtml(u.email)}')">Coins</button>
             <button class="btn btn-danger btn-sm" onclick="deleteUser('${escHtml(u.email)}')">Delete</button>
           </td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
+    }
+
+    async function toggleUserSetup(email, makeOn) {
+      const data = await api({ action: 'update_user', targetEmail: email, updates: { setupMode: !!makeOn } });
+      if (data.ok) { showToast(`Setup Mode ${makeOn ? 'ENABLED' : 'disabled'} for ${email}.`, 'success'); loadUsers(); }
+      else showToast(data.error || 'Failed.', 'error');
     }
 
     function openAddUser() { openModal('addUserModal'); }
