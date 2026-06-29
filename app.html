@@ -619,6 +619,7 @@
       <span class="mode-badge badge-purple" id="modeBadge">Video Only</span>
     </div>
     <div class="header-right">
+      <button class="btn btn-secondary btn-sm" id="setupModeBtn" onclick="toggleSetupMode()" title="Free test mode — shows your uploaded image, no Decart, no coins charged" style="display:none;">🛠 Setup Mode</button>
       <button class="btn btn-primary btn-sm" onclick="openBuyCoins()">Buy Coins</button>
       <button class="btn btn-ghost btn-sm" id="logoutBtn" onclick="logout()">Logout</button>
     </div>
@@ -814,7 +815,6 @@
       <span id="setupBadge" style="display:none; background:#f59e0b; color:#1a1a1a; font-weight:700; font-size:11px; padding:2px 8px; border-radius:6px; margin-left:8px;">SETUP MODE · FREE</span>
     </div>
     <div class="stream-controls">
-      <button class="btn btn-secondary btn-sm" id="setupModeBtn" onclick="toggleSetupMode()" title="Free test mode — shows your uploaded image, no Decart, no coins" style="display:none;">🛠 Setup Mode</button>
       <button class="btn btn-success" id="startBtn" onclick="startStream()">▶ Start</button>
       <button class="btn btn-danger" id="stopBtn" onclick="stopStream()" disabled>■ Stop</button>
     </div>
