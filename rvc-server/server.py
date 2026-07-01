@@ -420,6 +420,19 @@ def v2_set_slot(slot: int):
         return JSONResponse(status_code=502, content={"ok": False, "error": str(e)})
 
 
+@app.post("/v2/set_pitch")
+def v2_set_pitch(slot: int, pitch: int = 0):
+    """Set a w-okada slot's pitch shift (semitones), live. Backs the Voice 2.0
+    pitch slider so different speakers can dial themselves into the target range."""
+    try:
+        s = requests.get(f"{WOKADA_URL}/api/slot-manager/slots/{slot}", timeout=10).json()
+        s["pitch_shift"] = int(pitch)
+        r = requests.put(f"{WOKADA_URL}/api/slot-manager/slots/{slot}", json=s, timeout=15)
+        return {"ok": r.status_code == 200, "slot": int(slot), "pitch": int(pitch)}
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"ok": False, "error": str(e)})
+
+
 @app.post("/v2/convert")
 async def v2_convert(request: Request, ts: int = 0):
     """Voice 2.0 chunk convert, bandwidth-optimised for the tunnel.

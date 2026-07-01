@@ -3,6 +3,7 @@
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let mode = 'video';
 let engine = 'v1';                 // 'v1' (Standard) | 'v2' (Premium)
+let v2Pitch = 0;                   // Voice 2.0 pitch shift (semitones), user-adjustable slider
 let selectedVoice = null;
 let videoDelayMs = 0;              // ms to buffer video output (delays video to match slow audio)
 let frameBuffer = [];              // { time: DOMHighResTimeStamp, bmp: ImageBitmap }
@@ -89,6 +90,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('delaySlider').addEventListener('input', (e) => {
     setVideoDelay(parseInt(e.target.value));
   });
+
+  // Set up Voice 2.0 pitch slider (live-adjustable)
+  const pitchSlider = document.getElementById('pitchSlider');
+  if (pitchSlider) {
+    pitchSlider.addEventListener('input', (e) => {
+      v2Pitch = parseInt(e.target.value);
+      const lbl = document.getElementById('pitchLabel');
+      if (lbl) lbl.textContent = `Voice Pitch: ${v2Pitch > 0 ? '+' : ''}${v2Pitch}`;
+    });
+    pitchSlider.addEventListener('change', () => { applyV2Pitch(); });
+  }
 
   // Set up enhance toggle label
   document.getElementById('enhanceToggle').addEventListener('change', (e) => {
@@ -686,6 +698,8 @@ function setMode(m) {
   // Health-poll the voice engines only while a voice mode is active (saves ngrok requests)
   if (m === 'audio' || m === 'both') startEngineHealthPoll();
   else stopEngineHealthPoll();
+
+  updatePitchControlVisibility();
 }
 
 // ─── STREAM CONTROL ────────────────────────────────────────────────────────────
@@ -1160,6 +1174,13 @@ async function startV2Pipeline(voice) {
   }).catch(() => null);
   if (!slotRes || !slotRes.ok) throw new Error('Voice 2.0 engine not reachable. Try again.');
 
+  // Start at the current pitch-slider value
+  try {
+    await fetch(`${base}/v2/set_pitch?slot=${voice.wokadaSlot}&pitch=${v2Pitch}`, {
+      method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
+  } catch (_) {}
+
   audioCtx = new AudioContext({ sampleRate: V2_RATE });
   playbackCtx = new AudioContext({ sampleRate: V2_RATE });
   nextPlayTime = 0;
@@ -1435,6 +1456,25 @@ function setEngine(e) {
     ? 'Premium — smoother, more natural voice. One person at a time; costs more coins.'
     : 'Standard — always available.';
   if (guideBtn) guideBtn.style.display = 'none';   // Voice 2.0 is server-side now; no user setup
+  updatePitchControlVisibility();
+}
+
+// Pitch slider is Voice 2.0 only, and only meaningful in a voice mode
+function updatePitchControlVisibility() {
+  const el = document.getElementById('pitchControl');
+  if (!el) return;
+  el.style.display = (engine === 'v2' && (mode === 'audio' || mode === 'both')) ? '' : 'none';
+}
+
+// Push the current pitch to w-okada live (used on slider release + at stream start)
+async function applyV2Pitch() {
+  if (!isStreaming || engine !== 'v2' || !selectedVoice || selectedVoice.wokadaSlot == null || !rvcServerUrl) return;
+  const base = rvcServerUrl.replace(/\/$/, '');
+  try {
+    await fetch(`${base}/v2/set_pitch?slot=${selectedVoice.wokadaSlot}&pitch=${v2Pitch}`, {
+      method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
+    });
+  } catch (_) {}
 }
 
 function openV2Guide() {

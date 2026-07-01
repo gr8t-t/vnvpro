@@ -676,6 +676,11 @@
             <span id="engineHintText">Standard — powered by our server. Always available.</span>
             <button id="v2GuideBtn" class="btn btn-ghost btn-sm" style="display:none; font-size:10px; white-space:nowrap; padding:3px 9px;" onclick="openV2Guide()">Setup Guide</button>
           </div>
+          <div id="pitchControl" style="display:none; padding:10px 12px; border-bottom:1px solid var(--border);">
+            <label class="control-label" id="pitchLabel" style="font-size:11px; color:var(--text2);">Voice Pitch: 0</label>
+            <input type="range" id="pitchSlider" min="-12" max="12" value="0" step="1" style="width:100%;">
+            <div style="font-size:10px; color:var(--text2); margin-top:2px;">Slide up if your voice is deeper than the target voice; down if higher. Adjust while talking until it matches.</div>
+          </div>
           <div class="panel-header">Select Voice</div>
           <div class="voices-list" id="voicesList">
             <div class="voice-empty">
