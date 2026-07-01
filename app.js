@@ -91,16 +91,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setVideoDelay(parseInt(e.target.value));
   });
 
-  // Set up Voice 2.0 pitch slider (live-adjustable)
-  const pitchSlider = document.getElementById('pitchSlider');
-  if (pitchSlider) {
-    pitchSlider.addEventListener('input', (e) => {
-      v2Pitch = parseInt(e.target.value);
-      const lbl = document.getElementById('pitchLabel');
-      if (lbl) lbl.textContent = `Voice Pitch: ${v2Pitch > 0 ? '+' : ''}${v2Pitch}`;
-    });
-    pitchSlider.addEventListener('change', () => { applyV2Pitch(); });
-  }
+  // Set up Voice 2.0 pitch sliders — left panel (video+voice) and centered (voice-only).
+  // Both drive the same v2Pitch and stay in sync.
+  wirePitchSlider('pitchSlider');
+  wirePitchSlider('audioPitchSlider');
 
   // Set up enhance toggle label
   document.getElementById('enhanceToggle').addEventListener('change', (e) => {
@@ -1459,11 +1453,33 @@ function setEngine(e) {
   updatePitchControlVisibility();
 }
 
-// Pitch slider is Voice 2.0 only, and only meaningful in a voice mode
+// Pitch slider is Voice 2.0 only. Voice-only mode uses the big centered slider;
+// video+voice keeps the compact one in the left panel.
 function updatePitchControlVisibility() {
-  const el = document.getElementById('pitchControl');
-  if (!el) return;
-  el.style.display = (engine === 'v2' && (mode === 'audio' || mode === 'both')) ? '' : 'none';
+  const isV2 = engine === 'v2';
+  const panel  = document.getElementById('pitchControl');       // left panel (video+voice)
+  const center = document.getElementById('audioPitchControl');  // centered (voice-only)
+  if (panel)  panel.style.display  = (isV2 && mode === 'both')  ? '' : 'none';
+  if (center) center.style.display = (isV2 && mode === 'audio') ? '' : 'none';
+  setPitchUI(v2Pitch);   // keep both sliders + labels in sync
+}
+
+function setPitchUI(val) {
+  v2Pitch = val;
+  const txt = `Voice Pitch: ${val > 0 ? '+' : ''}${val}`;
+  ['pitchSlider', 'audioPitchSlider'].forEach(id => {
+    const s = document.getElementById(id); if (s && parseInt(s.value) !== val) s.value = val;
+  });
+  ['pitchLabel', 'audioPitchLabel'].forEach(id => {
+    const l = document.getElementById(id); if (l) l.textContent = txt;
+  });
+}
+
+function wirePitchSlider(id) {
+  const s = document.getElementById(id);
+  if (!s) return;
+  s.addEventListener('input', (e) => setPitchUI(parseInt(e.target.value)));
+  s.addEventListener('change', () => applyV2Pitch());
 }
 
 // Push the current pitch to w-okada live (used on slider release + at stream start)

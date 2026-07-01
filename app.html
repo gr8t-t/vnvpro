@@ -741,6 +741,11 @@
             <p style="text-align:center; color:var(--text2); font-size:13px; margin-top:20px;" id="voiceStatusText">
               Select a voice and press Start
             </p>
+            <div id="audioPitchControl" style="display:none; max-width:520px; margin:40px auto 0; padding:0 20px;">
+              <label class="control-label" id="audioPitchLabel" style="display:block; text-align:center; font-size:15px; font-weight:600; margin-bottom:12px;">Voice Pitch: 0</label>
+              <input type="range" id="audioPitchSlider" min="-12" max="12" value="0" step="1" style="width:100%;">
+              <div style="text-align:center; font-size:12px; color:var(--text2); margin-top:10px;">Slide up if your voice is deeper than the target voice; down if higher. Adjust while talking until it matches.</div>
+            </div>
           </div>
 
           <!-- Controls -->
