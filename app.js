@@ -866,9 +866,9 @@ function setStatus(text, live) {
 // videoDelayMs ago, so slow audio (RVC) lines up with the mouth on screen.
 
 // Hard ceiling on buffered frames (backstop vs. runaway GPU memory). At the
-// 5000ms max + 400ms headroom and ~30fps capture, normal use stays ~162 frames;
-// 200 gives margin without ever interfering with the time-based eviction.
-const MAX_DELAY_FRAMES = 200;
+// 6000ms max + 400ms headroom and ~30fps capture, normal use stays ~192 frames;
+// 240 gives margin without ever interfering with the time-based eviction.
+const MAX_DELAY_FRAMES = 240;
 
 function setVideoDelay(ms) {
   videoDelayMs = ms;
