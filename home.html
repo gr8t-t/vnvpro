@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home — VNV Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .home-main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 60px; }
+    .home-hello { margin-bottom: 6px; font-size: 26px; font-weight: 800; }
+    .home-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; }
+    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .tool-card {
+      display: block; text-decoration: none; color: inherit;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
+      padding: 22px; position: relative; transition: transform .12s, border-color .12s, box-shadow .12s;
+    }
+    a.tool-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
+    .tool-card.soon { opacity: .55; cursor: not-allowed; }
+    .tool-icon { font-size: 30px; margin-bottom: 12px; }
+    .tool-name { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+    .tool-desc { font-size: 13px; color: var(--text2); line-height: 1.55; }
+    .tool-badge {
+      position: absolute; top: 14px; right: 14px; font-size: 10px; font-weight: 700;
+      padding: 3px 8px; border-radius: 999px; letter-spacing: .3px;
+    }
+    .badge-new  { background: var(--accent); color: #fff; }
+    .badge-soon { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <a href="home.html" class="app-logo">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+      <div class="coin-chip" id="coinChip" onclick="location.href='app.html'">
+        🪙 <span id="coinBalance">—</span> coins
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" id="logoutBtn" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="home-main">
+    <div class="home-hello">Welcome to VNV Pro</div>
+    <div class="home-sub">Pick a tool to get started.</div>
+
+    <div class="tool-grid">
+      <a class="tool-card" href="app.html">
+        <div class="tool-icon">🎥</div>
+        <div class="tool-name">Realtime</div>
+        <div class="tool-desc">Live transformation — Voice Only, Voice&nbsp;+&nbsp;Video, or Video Only. Talk and appear as another voice/face in real time.</div>
+      </a>
+
+      <div class="tool-card soon">
+        <span class="tool-badge badge-new">Building</span>
+        <div class="tool-icon">🎬</div>
+        <div class="tool-name">Video Editor</div>
+        <div class="tool-desc">Upload a video, edit it with a text prompt, or swap in a person from a reference image — then download the result.</div>
+      </div>
+
+      <div class="tool-card soon">
+        <span class="tool-badge badge-soon">Coming soon</span>
+        <div class="tool-icon">🗣️</div>
+        <div class="tool-name">Text to Speech</div>
+        <div class="tool-desc">Type text and hear it spoken — in a natural voice or one of your custom VNV voices.</div>
+      </div>
+
+      <div class="tool-card soon">
+        <span class="tool-badge badge-soon">Coming soon</span>
+        <div class="tool-icon">🎙️</div>
+        <div class="tool-name">Voice Swap</div>
+        <div class="tool-desc">Record or upload an MP3/WAV and convert it into any voice you choose, then download.</div>
+      </div>
+
+      <div class="tool-card soon">
+        <span class="tool-badge badge-soon">Coming soon</span>
+        <div class="tool-icon">🏦</div>
+        <div class="tool-name">Banking</div>
+        <div class="tool-desc">Coming later.</div>
+      </div>
+
+      <div class="tool-card soon">
+        <span class="tool-badge badge-soon">Coming soon</span>
+        <div class="tool-icon">📦</div>
+        <div class="tool-name">Consignment</div>
+        <div class="tool-desc">Coming later.</div>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    // Require login
+    let session = null;
+    try { session = JSON.parse(localStorage.getItem('vnv_session') || 'null'); } catch (_) {}
+    if (!session || !session.email) { window.location.href = 'login.html'; }
+    const currentEmail = session ? session.email : null;
+
+    async function loadCoins() {
+      try {
+        const res = await fetch('/api/coins', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'balance', email: currentEmail })
+        });
+        const data = await res.json();
+        document.getElementById('coinBalance').textContent = Math.floor(data.balance ?? 0).toLocaleString();
+      } catch (_) {}
+    }
+    if (currentEmail) loadCoins();
+
+    function logout() {
+      localStorage.removeItem('vnv_session');
+      window.location.href = 'login.html';
+    }
+  </script>
+</body>
+</html>

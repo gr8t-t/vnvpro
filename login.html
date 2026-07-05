@@ -162,7 +162,7 @@
     (function() {
       try {
         const s = JSON.parse(localStorage.getItem('vnv_session') || 'null');
-        if (s && s.email) window.location.href = 'app.html';
+        if (s && s.email) window.location.href = 'home.html';
       } catch(_) {}
     })();
 
@@ -205,7 +205,7 @@
 
         if (res.ok && data.ok) {
           localStorage.setItem('vnv_session', JSON.stringify({ email: data.email }));
-          window.location.href = 'app.html';
+          window.location.href = 'home.html';
         } else {
           showError(data.error || 'Invalid email or password.');
         }
