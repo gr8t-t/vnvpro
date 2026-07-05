@@ -198,6 +198,66 @@ async def convert(voice: str = Form(...), pitch: int = Form(0), file: UploadFile
                 pass
 
 
+@app.post("/tts")
+async def tts(request: Request):
+    """Text-to-Speech: edge-tts neural synth, optionally converted through an
+    RVC character voice. JSON body: { text, base?, voice?, pitch? }.
+    - base: edge-tts voice id (default en-US-JennyNeural)
+    - voice: RVC model folderName; omit for the plain neural voice (returns MP3)
+    - pitch: semitone shift for the RVC conversion (default 0)
+    Returns MP3 (no voice) or WAV (converted)."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "JSON body required"})
+    text = (data.get("text") or "").strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"error": "text required"})
+    if len(text) > 1200:
+        return JSONResponse(status_code=400, content={"error": "text too long (max 1200 characters)"})
+    base = data.get("base") or "en-US-JennyNeural"
+    voice = data.get("voice") or None
+    pitch = int(data.get("pitch") or 0)
+
+    import edge_tts
+    buf = io.BytesIO()
+    try:
+        com = edge_tts.Communicate(text, base)
+        async for chunk in com.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"TTS synth failed: {e}"})
+    mp3 = buf.getvalue()
+    if not mp3:
+        return JSONResponse(status_code=502, content={"error": "TTS produced no audio"})
+
+    if not voice:
+        return Response(content=mp3, media_type="audio/mpeg")
+
+    # Convert through the requested RVC character voice (same path as /convert)
+    try:
+        rvc = get_model(voice)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    import librosa
+    y, _sr = librosa.load(io.BytesIO(mp3), sr=16000)
+    rvc.set_params(f0method="rmvpe", f0up_key=pitch, index_rate=0.75, protect=0.33)
+    try:
+        out, out_sr = await asyncio.get_event_loop().run_in_executor(
+            None, _infer_array, rvc, y.astype(np.float32), 16000)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": f"conversion failed: {e}"})
+    pcm = np.clip(out * 32767.0, -32768, 32767).astype(np.int16)
+    wb = io.BytesIO()
+    with wave.open(wb, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(out_sr)
+        w.writeframes(pcm.tobytes())
+    return Response(content=wb.getvalue(), media_type="audio/wav")
+
+
 # ── WebSocket: real-time streaming ────────────────────────────────────────────
 @app.websocket("/ws/{voice_folder}")
 async def voice_ws(websocket: WebSocket, voice_folder: str):

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text to Speech — VNV Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .tts-main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+    .tts-title { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+    .tts-sub { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+    .tts-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+    .tts-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: block; }
+    textarea.tts-text {
+      width: 100%; min-height: 130px; resize: vertical; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+      font-size: 14px; padding: 12px; font-family: inherit; line-height: 1.5;
+    }
+    textarea.tts-text:focus { outline: none; border-color: var(--accent); }
+    select.tts-select {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 14px; padding: 10px 12px;
+    }
+    .hint { font-size: 11px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+    .gen-spinner {
+      width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; margin: 0 auto 10px; animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <a href="home.html" class="app-logo" title="Back to Home">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+      <span class="mode-badge badge-purple">Text to Speech</span>
+      <span style="background:var(--green); color:#0a0a0a; font-weight:700; font-size:11px; padding:2px 8px; border-radius:6px;">FREE</span>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="location.href='home.html'">← Home</button>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="tts-main">
+    <div class="tts-title">🗣 Text to Speech</div>
+    <div class="tts-sub">Type anything and have it spoken — in a natural voice or in one of our character voices. Free.</div>
+    <div class="tts-card" id="offlineNote" style="display:none; border-color:#f59e0b; color:#f59e0b; font-size:13px;">
+      ⚠ The voice server is offline right now — Text to Speech is unavailable. Please try again later.
+    </div>
+
+    <div class="tts-card">
+      <label class="tts-label">1 · Your text <span id="charCount" style="color:var(--text2); font-weight:400;">(0 / 1200)</span></label>
+      <textarea class="tts-text" id="ttsText" maxlength="1200" placeholder="Type what you want said…"></textarea>
+    </div>
+
+    <div class="tts-card">
+      <label class="tts-label">2 · Voice</label>
+      <select class="tts-select" id="voiceSelect">
+        <optgroup label="Natural voices">
+          <option value="nat:en-US-JennyNeural">Natural — Female (US)</option>
+          <option value="nat:en-US-GuyNeural">Natural — Male (US)</option>
+          <option value="nat:en-GB-SoniaNeural">Natural — Female (UK)</option>
+          <option value="nat:en-GB-RyanNeural">Natural — Male (UK)</option>
+        </optgroup>
+        <optgroup label="Character voices" id="charGroup"></optgroup>
+      </select>
+      <div id="pitchWrap" style="display:none; margin-top:14px;">
+        <label class="tts-label" id="ttsPitchLabel" style="margin-bottom:4px;">Pitch: 0</label>
+        <input type="range" id="ttsPitch" min="-12" max="12" value="0" step="1" style="width:100%;">
+        <div class="hint">Character voices are converted from a female narrator. For male characters try sliding down (e.g. −12); leave 0 for female characters.</div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-bottom:16px;">
+      <button class="btn btn-success" id="genBtn" onclick="generate()" disabled>▶ Generate Speech</button>
+    </div>
+
+    <div class="tts-card" id="genStatus" style="display:none; text-align:center;">
+      <div class="gen-spinner"></div>
+      <div style="font-size:13px; font-weight:600;">Generating…</div>
+      <div class="hint">Character voices take a little longer (the voice conversion runs after the narration).</div>
+    </div>
+
+    <div class="tts-card" id="resultBox" style="display:none;">
+      <label class="tts-label" style="color:var(--green);">✓ Your speech</label>
+      <audio id="resultAudio" controls style="width:100%;"></audio>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn btn-primary" onclick="downloadResult()">⬇ Download MP3</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    let session = null;
+    try { session = JSON.parse(localStorage.getItem('vnv_session') || 'null'); } catch (_) {}
+    if (!session || !session.email) window.location.href = 'login.html';
+    const currentEmail = session ? session.email : null;
+
+    let rvcUrl = null, serverUp = false, resultBlob = null, resultIsMp3 = false, busy = false;
+
+    function showToast(msg, type = 'info', dur = 4000) {
+      const t = document.getElementById('toast');
+      const el = document.createElement('div');
+      el.className = `toast-item toast-${type}`;
+      el.textContent = msg;
+      t.appendChild(el);
+      setTimeout(() => el.remove(), dur);
+    }
+    function logout() { localStorage.removeItem('vnv_session'); window.location.href = 'login.html'; }
+
+    document.getElementById('ttsText').addEventListener('input', e => {
+      document.getElementById('charCount').textContent = `(${e.target.value.length} / 1200)`;
+      updateBtn();
+    });
+    document.getElementById('voiceSelect').addEventListener('change', () => {
+      const isChar = document.getElementById('voiceSelect').value.startsWith('char:');
+      document.getElementById('pitchWrap').style.display = isChar ? 'block' : 'none';
+    });
+    document.getElementById('ttsPitch').addEventListener('input', e => {
+      const v = parseInt(e.target.value);
+      document.getElementById('ttsPitchLabel').textContent = `Pitch: ${v > 0 ? '+' : ''}${v}`;
+    });
+
+    function updateBtn() {
+      document.getElementById('genBtn').disabled = !(serverUp && !busy && document.getElementById('ttsText').value.trim());
+    }
+
+    async function init() {
+      // voice server URL + health
+      try {
+        const r = await fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_rvc_url' }) });
+        rvcUrl = (await r.json()).url || null;
+      } catch (_) {}
+      if (rvcUrl) {
+        try {
+          const h = await fetch(rvcUrl.replace(/\/+$/, '') + '/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
+          serverUp = h.ok;
+        } catch (_) { serverUp = false; }
+      }
+      document.getElementById('offlineNote').style.display = serverUp ? 'none' : 'block';
+
+      // character voices
+      try {
+        const r = await fetch('/api/voices', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'list', email: currentEmail }) });
+        const voices = (await r.json()).voices || [];
+        const grp = document.getElementById('charGroup');
+        voices.filter(v => v.folderName && (v.isPublic || v.unlocked)).forEach(v => {
+          const o = document.createElement('option');
+          o.value = 'char:' + v.folderName;
+          o.textContent = v.name;
+          grp.appendChild(o);
+        });
+      } catch (_) {}
+      updateBtn();
+    }
+    init();
+
+    async function generate() {
+      if (busy) return;
+      const text = document.getElementById('ttsText').value.trim();
+      if (!text) return;
+      const sel = document.getElementById('voiceSelect').value;
+      const body = { text };
+      if (sel.startsWith('char:')) {
+        body.voice = sel.slice(5);
+        body.pitch = parseInt(document.getElementById('ttsPitch').value) || 0;
+      } else {
+        body.base = sel.slice(4);
+      }
+
+      busy = true; updateBtn();
+      document.getElementById('resultBox').style.display = 'none';
+      document.getElementById('genStatus').style.display = 'block';
+      try {
+        const res = await fetch(rvcUrl.replace(/\/+$/, '') + '/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Generation failed (${res.status})`);
+        }
+        resultIsMp3 = (res.headers.get('content-type') || '').includes('mpeg');
+        resultBlob = await res.blob();
+        const a = document.getElementById('resultAudio');
+        a.src = URL.createObjectURL(resultBlob);
+        document.getElementById('resultBox').style.display = 'block';
+      } catch (e) {
+        showToast(e.message || 'Generation failed.', 'error', 6000);
+      }
+      document.getElementById('genStatus').style.display = 'none';
+      busy = false; updateBtn();
+    }
+
+    // Download — MP3 directly, or encode WAV→MP3 with lamejs (same as the recorder)
+    function loadScript(src) {
+      return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    }
+    async function downloadResult() {
+      if (!resultBlob) return;
+      let blob = resultBlob, ext = 'mp3';
+      if (!resultIsMp3) {
+        try {
+          if (typeof lamejs === 'undefined') await loadScript('https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js');
+          const ctx = new AudioContext();
+          const buf = await ctx.decodeAudioData(await resultBlob.arrayBuffer());
+          await ctx.close();
+          const sr = buf.sampleRate, samples = buf.getChannelData(0);
+          const pcm = new Int16Array(samples.length);
+          for (let i = 0; i < samples.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, samples[i] * 32767));
+          const enc = new lamejs.Mp3Encoder(1, sr, 128), out = [];
+          for (let i = 0; i < pcm.length; i += 1152) {
+            const c = enc.encodeBuffer(pcm.subarray(i, i + 1152));
+            if (c.length) out.push(c);
+          }
+          const end = enc.flush(); if (end.length) out.push(end);
+          blob = new Blob(out, { type: 'audio/mp3' });
+        } catch (_) { ext = 'wav'; }
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `vnvpro-tts.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+  </script>
+</body>
+</html>

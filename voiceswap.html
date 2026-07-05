@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Swap — VNV Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .vs-main { max-width: 760px; margin: 0 auto; padding: 28px 20px 60px; }
+    .vs-title { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+    .vs-sub { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+    .vs-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+    .vs-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: block; }
+    select.vs-select {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 14px; padding: 10px 12px;
+    }
+    .drop {
+      border: 1.5px dashed var(--border); border-radius: 12px; padding: 18px; text-align: center;
+      cursor: pointer; position: relative; color: var(--text2); font-size: 13px;
+    }
+    .drop:hover { border-color: var(--accent); }
+    .drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .rec-timer { font-family: monospace; font-size: 30px; font-weight: 700; color: var(--accent2); text-align:center; }
+    .hint { font-size: 11px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+    .conv-spinner {
+      width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; margin: 0 auto 10px; animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .cost-box {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+    }
+    .cost-num { font-size: 20px; font-weight: 800; color: var(--accent2); }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <a href="home.html" class="app-logo" title="Back to Home">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+      <span class="mode-badge badge-purple">Voice Swap</span>
+      <div class="coin-chip" id="coinChip">
+        🪙 <span id="coinBalance">—</span> coins
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="location.href='home.html'">← Home</button>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="vs-main">
+    <div class="vs-title">🎙 Voice Swap</div>
+    <div class="vs-sub">Record something (or upload a recording), pick a voice, and download it spoken in that voice.</div>
+    <div class="vs-card" id="offlineNote" style="display:none; border-color:#f59e0b; color:#f59e0b; font-size:13px;">
+      ⚠ The voice server is offline right now — Voice Swap is unavailable. Please try again later.
+    </div>
+
+    <!-- 1. Audio in -->
+    <div class="vs-card">
+      <label class="vs-label">1 · Your recording <span style="color:var(--text2); font-weight:400;">(max 2:00)</span></label>
+      <div class="rec-timer" id="recTimer">0:00</div>
+      <div style="display:flex; gap:10px; margin:12px 0 10px;">
+        <button class="btn btn-primary" id="recStartBtn" style="flex:1;" onclick="recStart()">● Record</button>
+        <button class="btn btn-secondary" id="recStopBtn" style="flex:1; display:none;" onclick="recStop()">■ Stop</button>
+      </div>
+      <div style="text-align:center; font-size:11px; color:var(--text2); margin-bottom:8px;">— or —</div>
+      <div class="drop">
+        <input type="file" id="upInput" accept="audio/*,.mp3,.wav,.m4a,.ogg">
+        <strong style="color:var(--text);">Upload a recording</strong> · MP3/WAV/M4A
+      </div>
+      <audio id="srcAudio" controls style="width:100%; margin-top:12px; display:none;"></audio>
+      <div class="hint" id="srcInfo"></div>
+    </div>
+
+    <!-- 2. Voice -->
+    <div class="vs-card">
+      <label class="vs-label">2 · Target voice</label>
+      <select class="vs-select" id="voiceSelect"><option value="">Loading voices…</option></select>
+      <div style="margin-top:14px;">
+        <label class="vs-label" id="vsPitchLabel" style="margin-bottom:4px;">Pitch: 0</label>
+        <input type="range" id="vsPitch" min="-12" max="12" value="0" step="1" style="width:100%;">
+        <div class="hint">Set to match your voice vs the target: your voice deeper than the target → slide up; higher → slide down.</div>
+      </div>
+    </div>
+
+    <!-- Cost + convert -->
+    <div class="cost-box">
+      <div>
+        <div style="font-size:12px; color:var(--text2);">Cost for this recording</div>
+        <div class="cost-num" id="costNum">—</div>
+      </div>
+      <button class="btn btn-success" id="convBtn" onclick="convert()" disabled>▶ Convert</button>
+    </div>
+
+    <div class="vs-card" id="convStatus" style="display:none; text-align:center;">
+      <div class="conv-spinner"></div>
+      <div style="font-size:13px; font-weight:600;">Converting…</div>
+    </div>
+
+    <!-- Result -->
+    <div class="vs-card" id="resultBox" style="display:none;">
+      <label class="vs-label" style="color:var(--green);">✓ Converted</label>
+      <audio id="resultAudio" controls style="width:100%;"></audio>
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button class="btn btn-primary" onclick="downloadResult()">⬇ Download MP3</button>
+        <button class="btn btn-secondary" onclick="resetAll()">Start over</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    let session = null;
+    try { session = JSON.parse(localStorage.getItem('vnv_session') || 'null'); } catch (_) {}
+    if (!session || !session.email) window.location.href = 'login.html';
+    const currentEmail = session ? session.email : null;
+
+    const MAX_SEC = 120;
+    let rvcUrl = null, serverUp = false, coinBalance = 0, recordRate = 0.3;
+    let mediaRec = null, chunks = [], micStream = null, timerInt = null, secs = 0;
+    let srcBuffer = null, srcDuration = 0, resultBlob = null, busy = false;
+
+    function showToast(msg, type = 'info', dur = 4000) {
+      const t = document.getElementById('toast');
+      const el = document.createElement('div');
+      el.className = `toast-item toast-${type}`;
+      el.textContent = msg;
+      t.appendChild(el);
+      setTimeout(() => el.remove(), dur);
+    }
+    function logout() { localStorage.removeItem('vnv_session'); window.location.href = 'login.html'; }
+    function fmt(s) { return `${Math.floor(s/60)}:${Math.floor(s%60).toString().padStart(2,'0')}`; }
+
+    document.getElementById('vsPitch').addEventListener('input', e => {
+      const v = parseInt(e.target.value);
+      document.getElementById('vsPitchLabel').textContent = `Pitch: ${v > 0 ? '+' : ''}${v}`;
+    });
+    document.getElementById('upInput').addEventListener('change', e => { if (e.target.files[0]) pickFile(e.target.files[0]); e.target.value = ''; });
+
+    async function init() {
+      try {
+        const [rvcRes, balRes, rateRes, vRes] = await Promise.all([
+          fetch('/api/admin', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_rvc_url' }) }),
+          fetch('/api/coins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'balance', email: currentEmail }) }),
+          fetch('/api/coins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_rates' }) }),
+          fetch('/api/voices', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'list', email: currentEmail }) }),
+        ]);
+        rvcUrl = (await rvcRes.json()).url || null;
+        const bal = await balRes.json(); coinBalance = bal.balance ?? 0;
+        document.getElementById('coinBalance').textContent = Math.floor(coinBalance).toLocaleString();
+        const rd = await rateRes.json(); if (rd.rates && rd.rates.record) recordRate = parseFloat(rd.rates.record);
+        const voices = (await vRes.json()).voices || [];
+        const sel = document.getElementById('voiceSelect');
+        sel.innerHTML = '';
+        voices.filter(v => v.folderName && (v.isPublic || v.unlocked)).forEach(v => {
+          const o = document.createElement('option');
+          o.value = v.folderName; o.textContent = v.name;
+          sel.appendChild(o);
+        });
+        if (!sel.options.length) sel.innerHTML = '<option value="">No voices available</option>';
+      } catch (_) {}
+      if (rvcUrl) {
+        try {
+          const h = await fetch(rvcUrl.replace(/\/+$/, '') + '/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
+          serverUp = h.ok;
+        } catch (_) { serverUp = false; }
+      }
+      document.getElementById('offlineNote').style.display = serverUp ? 'none' : 'block';
+      updateUI();
+    }
+    init();
+
+    // ── record ──
+    async function recStart() {
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, autoGainControl: false, noiseSuppression: true }, video: false });
+      } catch (_) { showToast('Microphone access denied.', 'error'); return; }
+      chunks = [];
+      mediaRec = new MediaRecorder(micStream);
+      mediaRec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+      mediaRec.onstop = onRecStopped;
+      mediaRec.start();
+      secs = 0;
+      document.getElementById('recTimer').textContent = '0:00';
+      document.getElementById('recStartBtn').style.display = 'none';
+      document.getElementById('recStopBtn').style.display = '';
+      timerInt = setInterval(() => {
+        secs += 1;
+        document.getElementById('recTimer').textContent = fmt(secs);
+        if (secs >= MAX_SEC) recStop();
+      }, 1000);
+    }
+    function recStop() {
+      if (timerInt) { clearInterval(timerInt); timerInt = null; }
+      if (mediaRec && mediaRec.state !== 'inactive') { try { mediaRec.stop(); } catch (_) {} }
+      if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+      document.getElementById('recStopBtn').style.display = 'none';
+      document.getElementById('recStartBtn').style.display = '';
+    }
+    async function onRecStopped() {
+      const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
+      await loadSource(blob, 'recording');
+    }
+    async function pickFile(f) {
+      const ok = f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(f.name);
+      if (!ok) { showToast('Please choose an audio file.', 'error'); return; }
+      await loadSource(f, f.name);
+    }
+    async function loadSource(blob, label) {
+      try {
+        const ctx = new AudioContext();
+        const buf = await ctx.decodeAudioData(await blob.arrayBuffer());
+        await ctx.close();
+        if (buf.duration > MAX_SEC) { showToast(`Max ${MAX_SEC}s — please trim it.`, 'error', 6000); return; }
+        srcBuffer = buf; srcDuration = buf.duration;
+      } catch (_) { showToast('Could not read that audio. Try MP3 or WAV.', 'error'); return; }
+      const a = document.getElementById('srcAudio');
+      a.src = URL.createObjectURL(blob); a.style.display = 'block';
+      document.getElementById('srcInfo').textContent = `${label} · ${Math.round(srcDuration)}s`;
+      document.getElementById('recTimer').textContent = fmt(srcDuration);
+      document.getElementById('resultBox').style.display = 'none';
+      updateUI();
+    }
+
+    function updateUI() {
+      const cost = srcDuration ? Math.ceil(srcDuration * recordRate) : 0;
+      document.getElementById('costNum').textContent = cost ? `${cost.toLocaleString()} coins` : '—';
+      document.getElementById('convBtn').disabled = !(serverUp && srcBuffer && !busy && document.getElementById('voiceSelect').value);
+    }
+    document.getElementById('voiceSelect').addEventListener('change', updateUI);
+
+    // 16kHz mono 16-bit WAV from AudioBuffer (same as the in-app recorder)
+    function toWav(buf, targetSR = 16000) {
+      const src = buf.getChannelData(0);
+      const ratio = buf.sampleRate / targetSR;
+      const outLen = Math.floor(src.length / ratio);
+      const pcm = new Int16Array(outLen);
+      for (let i = 0; i < outLen; i++) {
+        const s = src[Math.floor(i * ratio)] || 0;
+        pcm[i] = Math.max(-32768, Math.min(32767, s * 32767));
+      }
+      const buffer = new ArrayBuffer(44 + pcm.length * 2);
+      const view = new DataView(buffer);
+      const ws = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+      ws(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true); ws(8, 'WAVE');
+      ws(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true); view.setUint32(24, targetSR, true);
+      view.setUint32(28, targetSR * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+      ws(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+      for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, pcm[i], true);
+      return new Blob([view], { type: 'audio/wav' });
+    }
+
+    async function convert() {
+      if (busy || !srcBuffer) return;
+      const voice = document.getElementById('voiceSelect').value;
+      if (!voice) { showToast('Pick a target voice.', 'error'); return; }
+      const cost = Math.ceil(srcDuration * recordRate);
+      if (coinBalance < cost) { showToast(`Need ${cost} coins (you have ${Math.floor(coinBalance)}). Please top up.`, 'error', 6000); return; }
+
+      busy = true; updateUI();
+      document.getElementById('convStatus').style.display = 'block';
+      document.getElementById('resultBox').style.display = 'none';
+      try {
+        const fd = new FormData();
+        fd.append('voice', voice);
+        fd.append('pitch', String(parseInt(document.getElementById('vsPitch').value) || 0));
+        fd.append('file', toWav(srcBuffer), 'recording.wav');
+        const res = await fetch(rvcUrl.replace(/\/+$/, '') + '/convert', {
+          method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }, body: fd
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Conversion failed');
+        }
+        resultBlob = await res.blob();
+
+        // charge coins for the recording length (same as the in-app recorder)
+        try {
+          const dr = await fetch('/api/coins', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action:'drain', email: currentEmail, mode:'record', seconds: Math.ceil(srcDuration) })
+          });
+          if (dr.ok) {
+            const d = await dr.json();
+            coinBalance = d.balance ?? coinBalance;
+            document.getElementById('coinBalance').textContent = Math.floor(coinBalance).toLocaleString();
+          }
+        } catch (_) {}
+
+        document.getElementById('resultAudio').src = URL.createObjectURL(resultBlob);
+        document.getElementById('resultBox').style.display = 'block';
+        showToast('✓ Converted!', 'success');
+      } catch (e) {
+        showToast(e.message || 'Conversion failed.', 'error', 6000);
+      }
+      document.getElementById('convStatus').style.display = 'none';
+      busy = false; updateUI();
+    }
+
+    // Download as MP3 (lamejs), WAV fallback
+    function loadScript(src) {
+      return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    }
+    async function downloadResult() {
+      if (!resultBlob) return;
+      let blob = resultBlob, ext = 'wav';
+      try {
+        if (typeof lamejs === 'undefined') await loadScript('https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js');
+        const ctx = new AudioContext();
+        const buf = await ctx.decodeAudioData(await resultBlob.arrayBuffer());
+        await ctx.close();
+        const sr = buf.sampleRate, samples = buf.getChannelData(0);
+        const pcm = new Int16Array(samples.length);
+        for (let i = 0; i < samples.length; i++) pcm[i] = Math.max(-32768, Math.min(32767, samples[i] * 32767));
+        const enc = new lamejs.Mp3Encoder(1, sr, 128), out = [];
+        for (let i = 0; i < pcm.length; i += 1152) {
+          const c = enc.encodeBuffer(pcm.subarray(i, i + 1152));
+          if (c.length) out.push(c);
+        }
+        const end = enc.flush(); if (end.length) out.push(end);
+        blob = new Blob(out, { type: 'audio/mp3' }); ext = 'mp3';
+      } catch (_) {}
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      const vName = document.getElementById('voiceSelect').selectedOptions[0]?.textContent || 'voice';
+      a.download = `vnvpro-${vName.replace(/\s+/g, '_').toLowerCase()}.${ext}`;
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function resetAll() {
+      srcBuffer = null; srcDuration = 0; resultBlob = null;
+      document.getElementById('srcAudio').style.display = 'none';
+      document.getElementById('srcInfo').textContent = '';
+      document.getElementById('recTimer').textContent = '0:00';
+      document.getElementById('resultBox').style.display = 'none';
+      updateUI();
+    }
+  </script>
+</body>
+</html>
