@@ -8,7 +8,9 @@ const PACKAGES_KEY = 'vnv_coin_packages';
 const PENDING_TOPUPS_KEY = 'vnv_pending_topups';
 const USERS_KEY = 'vnv_users';
 
-const DEFAULT_RATES = { video: 2.0, audio: 0.5, both: 2.5, record: 0.3, audio2: 1.0, both2: 3.5 };
+// edit = Video Editor (async Lucy Edit): Decart bills $0.04/sec of output video
+// (2x the realtime $0.02/sec), so 6 coins/sec keeps the same margin as video@3.
+const DEFAULT_RATES = { video: 2.0, audio: 0.5, both: 2.5, record: 0.3, audio2: 1.0, both2: 3.5, edit: 6.0 };
 
 const DEFAULT_PACKAGES = [
   { id: 'pkg_starter',  coins: 720,  priceNaira: 16000,  priceUsd: 10,  label: 'Starter' },

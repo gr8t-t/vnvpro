@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Editor — VNV Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .ed-main { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+    .ed-title { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+    .ed-sub { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
+    .ed-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
+    .ed-label { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: block; }
+    .drop {
+      border: 1.5px dashed var(--border); border-radius: 12px; padding: 22px; text-align: center;
+      cursor: pointer; position: relative; color: var(--text2); font-size: 13px; transition: border-color .15s;
+    }
+    .drop:hover { border-color: var(--accent); }
+    .drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .ed-preview-vid { max-width: 100%; border-radius: 12px; margin-top: 12px; display: none; max-height: 300px; }
+    .ed-ref-img { max-width: 120px; border-radius: 10px; margin-top: 10px; display: none; }
+    .cost-box {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px;
+    }
+    .cost-num { font-size: 20px; font-weight: 800; color: var(--accent2); }
+    .job-status { display: none; text-align: center; padding: 18px 10px 6px; }
+    .job-spinner {
+      width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; margin: 0 auto 12px; animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .result-box { display: none; }
+    .hint { font-size: 11px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <a href="home.html" class="app-logo" title="Back to Home">
+        <div class="logo-icon">✦</div>
+        VNV Pro
+      </a>
+      <span class="mode-badge badge-purple">Video Editor</span>
+      <div class="coin-chip" id="coinChip">
+        🪙 <span id="coinBalance">—</span> coins
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost btn-sm" onclick="location.href='home.html'">← Home</button>
+      <button class="btn btn-ghost btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="ed-main">
+    <div class="ed-title">🎬 Video Editor</div>
+    <div class="ed-sub">Upload a video, describe the edit (and optionally add a reference image of a person/face to swap in), then download the edited result.</div>
+
+    <!-- 1. Video -->
+    <div class="ed-card">
+      <label class="ed-label">1 · Your video</label>
+      <div class="drop" id="vidDrop">
+        <input type="file" id="vidInput" accept="video/mp4,video/*">
+        <strong style="color:var(--text);">Upload video</strong> · MP4 recommended · this is the video that will be edited
+      </div>
+      <video id="vidPreview" class="ed-preview-vid" controls muted></video>
+      <div class="hint" id="vidInfo"></div>
+    </div>
+
+    <!-- 2. Reference image -->
+    <div class="ed-card">
+      <label class="ed-label">2 · Reference image <span style="color:var(--text2); font-weight:400;">(optional — the person/face or item to put into the video)</span></label>
+      <div class="drop" id="refDrop">
+        <input type="file" id="refInput" accept="image/*">
+        <strong style="color:var(--text);">Upload image</strong> · JPG/PNG · e.g. the face/person to swap in
+      </div>
+      <img id="refPreview" class="ed-ref-img" alt="Reference">
+      <div class="hint" id="refInfo"></div>
+    </div>
+
+    <!-- 3. Prompt -->
+    <div class="ed-card">
+      <label class="ed-label">3 · What should change?</label>
+      <input type="text" class="form-input" id="promptInput"
+        value="Replace the person in the video with the person in the reference image. Keep all movements, pose and background exactly the same.">
+      <div class="hint">Examples: “Replace the person with the person in the reference image” · “Change the shirt to a red leather jacket” · “Make the background a beach at sunset”.</div>
+    </div>
+
+    <!-- Cost + start -->
+    <div class="cost-box">
+      <div>
+        <div style="font-size:12px; color:var(--text2);">Cost for this video</div>
+        <div class="cost-num" id="costNum">—</div>
+      </div>
+      <button class="btn btn-success" id="startBtn" onclick="startEdit()" disabled>▶ Edit Video</button>
+    </div>
+
+    <!-- Progress -->
+    <div class="ed-card job-status" id="jobStatus">
+      <div class="job-spinner"></div>
+      <div id="jobStatusText" style="font-size:14px; font-weight:600;">Uploading…</div>
+      <div class="hint" id="jobElapsed">This can take a few minutes — keep this page open.</div>
+    </div>
+
+    <!-- Result -->
+    <div class="ed-card result-box" id="resultBox">
+      <label class="ed-label" style="color:var(--green);">✓ Done — your edited video</label>
+      <video id="resultVideo" class="ed-preview-vid" style="display:block;" controls></video>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button class="btn btn-primary" id="downloadBtn" onclick="downloadResult()">⬇ Download</button>
+        <button class="btn btn-secondary" onclick="resetEditor()">Edit another video</button>
+      </div>
+    </div>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    // ── session ──
+    let session = null;
+    try { session = JSON.parse(localStorage.getItem('vnv_session') || 'null'); } catch (_) {}
+    if (!session || !session.email) window.location.href = 'login.html';
+    const currentEmail = session ? session.email : null;
+
+    const DECART_JOBS = 'https://api.decart.ai/v1/jobs/lucy-2.1';
+    let decartApiKey = null;
+    let coinBalance = 0;
+    let editRate = 6;              // coins per second of video (live from get_rates)
+    let vidFile = null, refFile = null, vidDuration = 0;
+    let resultBlob = null, jobRunning = false;
+
+    function showToast(msg, type = 'info', dur = 4000) {
+      const t = document.getElementById('toast');
+      const el = document.createElement('div');
+      el.className = `toast-item toast-${type}`;
+      el.textContent = msg;
+      t.appendChild(el);
+      setTimeout(() => el.remove(), dur);
+    }
+    function logout() { localStorage.removeItem('vnv_session'); window.location.href = 'login.html'; }
+
+    // ── init ──
+    async function init() {
+      try {
+        const [balRes, rateRes, keyRes] = await Promise.all([
+          fetch('/api/coins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'balance', email: currentEmail }) }),
+          fetch('/api/coins', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'get_rates' }) }),
+          fetch('/api/get-key', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: currentEmail }) }),
+        ]);
+        const bal = await balRes.json();  coinBalance = bal.balance ?? 0;
+        document.getElementById('coinBalance').textContent = Math.floor(coinBalance).toLocaleString();
+        const rd = await rateRes.json();  if (rd.rates && rd.rates.edit) editRate = parseFloat(rd.rates.edit);
+        const kd = await keyRes.json();   decartApiKey = kd.key || null;
+        if (!decartApiKey) showToast('Could not load the editing engine key. Refresh and try again.', 'error', 6000);
+      } catch (_) {
+        showToast('Network problem loading the editor. Refresh to retry.', 'error', 6000);
+      }
+      updateCost();
+    }
+    init();
+
+    // ── video pick ──
+    document.getElementById('vidInput').addEventListener('change', e => { if (e.target.files[0]) pickVideo(e.target.files[0]); });
+    function pickVideo(f) {
+      if (!f.type.startsWith('video/')) { showToast('Please choose a video file.', 'error'); return; }
+      if (f.size > 300 * 1024 * 1024) { showToast('Video too large (max 300MB).', 'error'); return; }
+      vidFile = f;
+      const url = URL.createObjectURL(f);
+      const v = document.getElementById('vidPreview');
+      v.src = url; v.style.display = 'block';
+      v.onloadedmetadata = () => {
+        vidDuration = v.duration || 0;
+        if (vidDuration > 300) {
+          showToast('Max video length is 5 minutes. Please trim it.', 'error', 6000);
+          vidFile = null; vidDuration = 0; v.style.display = 'none';
+        }
+        document.getElementById('vidInfo').textContent = vidFile ? `${f.name} · ${Math.round(vidDuration)}s` : '';
+        updateCost();
+      };
+    }
+
+    // ── reference pick ──
+    document.getElementById('refInput').addEventListener('change', e => { if (e.target.files[0]) pickRef(e.target.files[0]); });
+    function pickRef(f) {
+      if (!f.type.startsWith('image/')) { showToast('Please choose an image file.', 'error'); return; }
+      if (f.size > 10 * 1024 * 1024) { showToast('Image too large (max 10MB).', 'error'); return; }
+      refFile = f;
+      const img = document.getElementById('refPreview');
+      img.src = URL.createObjectURL(f); img.style.display = 'block';
+      document.getElementById('refInfo').textContent = f.name;
+    }
+
+    function updateCost() {
+      const cost = vidDuration ? Math.ceil(vidDuration) * editRate : 0;
+      document.getElementById('costNum').textContent = cost ? `${cost.toLocaleString()} coins` : '—';
+      document.getElementById('startBtn').disabled = !(vidFile && decartApiKey && !jobRunning);
+    }
+
+    // ── run the job ──
+    async function startEdit() {
+      if (jobRunning) return;
+      if (!vidFile) { showToast('Upload a video first.', 'error'); return; }
+      const prompt = document.getElementById('promptInput').value.trim();
+      if (!prompt) { showToast('Describe what should change.', 'error'); return; }
+      const cost = Math.ceil(vidDuration) * editRate;
+      if (coinBalance < cost) { showToast(`You need ${cost.toLocaleString()} coins for this video (you have ${Math.floor(coinBalance).toLocaleString()}).`, 'error', 6000); return; }
+
+      jobRunning = true;
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('resultBox').style.display = 'none';
+      const st = document.getElementById('jobStatus'); st.style.display = 'block';
+      const stText = document.getElementById('jobStatusText');
+      const stEl = document.getElementById('jobElapsed');
+
+      try {
+        // 1) charge coins up front (job length is known)
+        stText.textContent = 'Reserving coins…';
+        const drainRes = await fetch('/api/coins', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action:'drain', email: currentEmail, mode:'edit', seconds: Math.ceil(vidDuration) })
+        });
+        if (!drainRes.ok) throw new Error('Could not charge coins — please top up and retry.');
+        const d = await drainRes.json();
+        coinBalance = d.balance ?? (coinBalance - cost);
+        document.getElementById('coinBalance').textContent = Math.floor(coinBalance).toLocaleString();
+
+        // 2) submit the job straight to Decart (CORS is open; key is the same one realtime uses)
+        stText.textContent = 'Uploading video…';
+        const fd = new FormData();
+        fd.append('data', vidFile);
+        fd.append('prompt', prompt);
+        if (refFile) fd.append('reference_image', refFile);
+        const sub = await fetch(DECART_JOBS, { method: 'POST', headers: { 'X-API-KEY': decartApiKey }, body: fd });
+        if (!sub.ok) throw new Error('Upload failed (' + sub.status + '). Your coins were charged — contact support for a refund if this repeats.');
+        const { job_id } = await sub.json();
+        if (!job_id) throw new Error('No job id returned. Contact support if coins were charged.');
+
+        // 3) poll
+        const t0 = Date.now();
+        stText.textContent = 'Editing your video…';
+        let status = '';
+        while (true) {
+          await new Promise(r => setTimeout(r, 5000));
+          const el = Math.round((Date.now() - t0) / 1000);
+          stEl.textContent = `Working… ${Math.floor(el/60)}m ${el%60}s — keep this page open.`;
+          try {
+            const pr = await fetch(`https://api.decart.ai/v1/jobs/${job_id}`, { headers: { 'X-API-KEY': decartApiKey } });
+            const pj = await pr.json();
+            status = (pj.status || '').toLowerCase();
+          } catch (_) { continue; }
+          if (status === 'completed') break;
+          if (status === 'failed' || status === 'error' || status === 'cancelled') {
+            throw new Error('The edit failed on the server. Your coins were charged — contact support for a refund.');
+          }
+        }
+
+        // 4) download result
+        stText.textContent = 'Fetching your edited video…';
+        const out = await fetch(`https://api.decart.ai/v1/jobs/${job_id}/content`, { headers: { 'X-API-KEY': decartApiKey } });
+        if (!out.ok) throw new Error('Could not fetch the result. Contact support.');
+        resultBlob = await out.blob();
+        const rv = document.getElementById('resultVideo');
+        rv.src = URL.createObjectURL(resultBlob);
+        document.getElementById('resultBox').style.display = 'block';
+        showToast('✓ Video edited!', 'success');
+      } catch (err) {
+        showToast(err.message || 'Something went wrong.', 'error', 8000);
+      }
+      st.style.display = 'none';
+      jobRunning = false;
+      updateCost();
+    }
+
+    function downloadResult() {
+      if (!resultBlob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(resultBlob);
+      a.download = 'vnvpro-edited.mp4';
+      document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    function resetEditor() {
+      vidFile = null; refFile = null; vidDuration = 0; resultBlob = null;
+      ['vidPreview','refPreview'].forEach(id => { const el = document.getElementById(id); el.src=''; el.style.display='none'; });
+      document.getElementById('vidInfo').textContent = '';
+      document.getElementById('refInfo').textContent = '';
+      document.getElementById('vidInput').value = '';
+      document.getElementById('refInput').value = '';
+      document.getElementById('resultBox').style.display = 'none';
+      updateCost();
+    }
+  </script>
+</body>
+</html>
