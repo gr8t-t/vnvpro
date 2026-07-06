@@ -15,6 +15,8 @@ $AdminApi      = 'https://vnvpro.vercel.app/api/admin'
 $AdminPassword = '09130370801Maviegr8@'   # <-- if you change ADMIN_PASSWORD in Vercel, update this line
 $Port          = 8765
 $WokadaPort    = 18000
+$CloneDir      = 'C:\Users\USER\seed-vc'
+$ClonePort     = 18100
 
 # Your PERMANENT ngrok domain (Option A). Paste the bare domain only -
 # e.g.  tough-cat-1234.ngrok-free.app   (NO https://, no slash).
@@ -32,7 +34,7 @@ Write-Host '============================================================'
 
 # 0) Free the ports so we never hit "only one usage of each socket address"
 Write-Host 'Clearing any previous server/ngrok instances...'
-foreach ($p in @($Port, $WokadaPort)) {
+foreach ($p in @($Port, $WokadaPort, $ClonePort)) {
   try {
     Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
       ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
@@ -47,6 +49,14 @@ if (Test-Path (Join-Path $WokadaDir 'main.exe')) {
   Start-Process cmd -ArgumentList '/k', "title VNV - Voice 2.0 (w-okada) && cd /d `"$WokadaDir`" && main.exe cui --https false --no_cui True"
 } else {
   Write-Host "w-okada not found at $WokadaDir - Voice 2.0 will stay offline." -ForegroundColor Yellow
+}
+
+# 1b) Start the Seed-VC voice-clone server in its own window (if installed)
+if (Test-Path (Join-Path $CloneDir 'clone_server.py')) {
+  Write-Host 'Starting Voice Clone (Seed-VC)...'
+  Start-Process cmd -ArgumentList '/k', "title VNV - Voice Clone (Seed-VC) && cd /d `"$CloneDir`" && venv\Scripts\python.exe clone_server.py"
+} else {
+  Write-Host "Seed-VC not found at $CloneDir - voice cloning will stay offline." -ForegroundColor Yellow
 }
 
 # 2) Start the RVC voice server (Voice 1.0) in its own window (venv = latest code)
@@ -96,7 +106,7 @@ try {
   Write-Host '============================================================' -ForegroundColor Green
   Write-Host '   DONE. Voice will be LIVE once the two server windows' -ForegroundColor Green
   Write-Host '   finish loading (w-okada takes ~30-60s the first time).' -ForegroundColor Green
-  Write-Host '   Keep the three windows open while users are online.' -ForegroundColor Green
+  Write-Host '   Keep the server windows open while users are online.' -ForegroundColor Green
   Write-Host '============================================================' -ForegroundColor Green
 } catch {
   Write-Host ''

@@ -68,11 +68,33 @@
           <option value="nat:en-GB-RyanNeural">Natural — Male (UK)</option>
         </optgroup>
         <optgroup label="Character voices" id="charGroup"></optgroup>
+        <optgroup label="Your own voice sample">
+          <option value="clone" id="cloneOpt">🎤 Clone from a voice sample (upload below)</option>
+        </optgroup>
       </select>
       <div id="pitchWrap" style="display:none; margin-top:14px;">
         <label class="tts-label" id="ttsPitchLabel" style="margin-bottom:4px;">Pitch: 0</label>
         <input type="range" id="ttsPitch" min="-12" max="12" value="0" step="1" style="width:100%;">
         <div class="hint">Character voices are converted from a female narrator. For male characters try sliding down (e.g. −12); leave 0 for female characters.</div>
+      </div>
+      <div id="cloneWrap" style="display:none; margin-top:14px;">
+        <label class="tts-label">Voice sample to clone <span style="color:var(--text2); font-weight:400;">(MP3/WAV, 5–30 seconds, one clear speaker, no music)</span></label>
+        <div style="border:1.5px dashed var(--border); border-radius:12px; padding:16px; text-align:center; cursor:pointer; position:relative; color:var(--text2); font-size:13px;">
+          <input type="file" id="cloneRefInput" accept="audio/*,.mp3,.wav,.m4a,.ogg" style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;">
+          <strong style="color:var(--text);">Upload voice sample</strong> · the voice that should speak your text
+        </div>
+        <audio id="cloneRefAudio" controls style="width:100%; margin-top:10px; display:none;"></audio>
+        <div class="hint" id="cloneRefInfo"></div>
+        <div style="margin-top:12px;">
+          <label class="tts-label" style="margin-bottom:4px;">Narrator</label>
+          <label style="font-size:13px; margin-right:16px; cursor:pointer;"><input type="radio" name="cloneBase" value="en-US-JennyNeural" checked> Female</label>
+          <label style="font-size:13px; cursor:pointer;"><input type="radio" name="cloneBase" value="en-US-GuyNeural"> Male</label>
+          <div class="hint">Pick the narrator closest to the sample's gender — it gives the most natural result. Pitch is matched automatically.</div>
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:12px; font-size:12px; color:var(--text2); cursor:pointer;">
+          <input type="checkbox" id="cloneConsent" style="margin-top:2px;">
+          <span>I confirm I have permission to use this voice.</span>
+        </label>
       </div>
     </div>
 
@@ -103,7 +125,8 @@
     if (!session || !session.email) window.location.href = 'login.html';
     const currentEmail = session ? session.email : null;
 
-    let rvcUrl = null, serverUp = false, resultBlob = null, resultIsMp3 = false, busy = false;
+    let rvcUrl = null, serverUp = false, cloneUp = false, resultBlob = null, resultIsMp3 = false, busy = false;
+    let cloneRefFile = null;   // uploaded voice sample for cloning
 
     function showToast(msg, type = 'info', dur = 4000) {
       const t = document.getElementById('toast');
@@ -120,16 +143,35 @@
       updateBtn();
     });
     document.getElementById('voiceSelect').addEventListener('change', () => {
-      const isChar = document.getElementById('voiceSelect').value.startsWith('char:');
-      document.getElementById('pitchWrap').style.display = isChar ? 'block' : 'none';
+      const val = document.getElementById('voiceSelect').value;
+      document.getElementById('pitchWrap').style.display = val.startsWith('char:') ? 'block' : 'none';
+      document.getElementById('cloneWrap').style.display = val === 'clone' ? 'block' : 'none';
+      updateBtn();
     });
+    document.getElementById('cloneRefInput').addEventListener('change', e => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      const ok = f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(f.name);
+      if (!ok) { showToast('Please choose an audio file.', 'error'); return; }
+      if (f.size > 15 * 1024 * 1024) { showToast('Sample too large (max 15MB).', 'error'); return; }
+      cloneRefFile = f;
+      const a = document.getElementById('cloneRefAudio');
+      a.src = URL.createObjectURL(f); a.style.display = 'block';
+      document.getElementById('cloneRefInfo').textContent = f.name;
+      updateBtn();
+    });
+    document.getElementById('cloneConsent').addEventListener('change', updateBtn);
     document.getElementById('ttsPitch').addEventListener('input', e => {
       const v = parseInt(e.target.value);
       document.getElementById('ttsPitchLabel').textContent = `Pitch: ${v > 0 ? '+' : ''}${v}`;
     });
 
     function updateBtn() {
-      document.getElementById('genBtn').disabled = !(serverUp && !busy && document.getElementById('ttsText').value.trim());
+      let ready = serverUp && !busy && document.getElementById('ttsText').value.trim();
+      if (document.getElementById('voiceSelect').value === 'clone') {
+        ready = ready && cloneUp && cloneRefFile && document.getElementById('cloneConsent').checked;
+      }
+      document.getElementById('genBtn').disabled = !ready;
     }
 
     async function init() {
@@ -139,11 +181,13 @@
         rvcUrl = (await r.json()).url || null;
       } catch (_) {}
       if (rvcUrl) {
-        try {
-          const h = await fetch(rvcUrl.replace(/\/+$/, '') + '/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
-          serverUp = h.ok;
-        } catch (_) { serverUp = false; }
+        const base = rvcUrl.replace(/\/+$/, '');
+        const hdrs = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+        try { serverUp = (await fetch(base + '/health', hdrs)).ok; } catch (_) { serverUp = false; }
+        try { const c = await fetch(base + '/clone/health', hdrs); cloneUp = c.ok && (await c.json()).ok === true; } catch (_) { cloneUp = false; }
       }
+      const cloneOpt = document.getElementById('cloneOpt');
+      if (cloneOpt && !cloneUp) { cloneOpt.disabled = true; cloneOpt.textContent += ' — offline'; }
       document.getElementById('offlineNote').style.display = serverUp ? 'none' : 'block';
 
       // character voices
@@ -167,23 +211,38 @@
       const text = document.getElementById('ttsText').value.trim();
       if (!text) return;
       const sel = document.getElementById('voiceSelect').value;
-      const body = { text };
-      if (sel.startsWith('char:')) {
-        body.voice = sel.slice(5);
-        body.pitch = parseInt(document.getElementById('ttsPitch').value) || 0;
-      } else {
-        body.base = sel.slice(4);
+      const isClone = sel === 'clone';
+      if (isClone && (!cloneRefFile || !document.getElementById('cloneConsent').checked)) {
+        showToast('Upload a voice sample and confirm you have permission.', 'error'); return;
       }
 
       busy = true; updateBtn();
       document.getElementById('resultBox').style.display = 'none';
       document.getElementById('genStatus').style.display = 'block';
       try {
-        const res = await fetch(rvcUrl.replace(/\/+$/, '') + '/tts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-          body: JSON.stringify(body)
-        });
+        let res;
+        if (isClone) {
+          const fd = new FormData();
+          fd.append('text', text);
+          fd.append('base', document.querySelector('input[name="cloneBase"]:checked').value);
+          fd.append('reference', cloneRefFile, cloneRefFile.name || 'reference.wav');
+          res = await fetch(rvcUrl.replace(/\/+$/, '') + '/tts_clone', {
+            method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }, body: fd
+          });
+        } else {
+          const body = { text };
+          if (sel.startsWith('char:')) {
+            body.voice = sel.slice(5);
+            body.pitch = parseInt(document.getElementById('ttsPitch').value) || 0;
+          } else {
+            body.base = sel.slice(4);
+          }
+          res = await fetch(rvcUrl.replace(/\/+$/, '') + '/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+            body: JSON.stringify(body)
+          });
+        }
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || `Generation failed (${res.status})`);

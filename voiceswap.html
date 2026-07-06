@@ -82,10 +82,24 @@
     <div class="vs-card">
       <label class="vs-label">2 · Target voice</label>
       <select class="vs-select" id="voiceSelect"><option value="">Loading voices…</option></select>
-      <div style="margin-top:14px;">
+      <div id="pitchBlock" style="margin-top:14px;">
         <label class="vs-label" id="vsPitchLabel" style="margin-bottom:4px;">Pitch: 0</label>
         <input type="range" id="vsPitch" min="-12" max="12" value="0" step="1" style="width:100%;">
         <div class="hint">Set to match your voice vs the target: your voice deeper than the target → slide up; higher → slide down.</div>
+      </div>
+      <div id="cloneBlock" style="display:none; margin-top:14px;">
+        <label class="vs-label">Voice sample to clone <span style="color:var(--text2); font-weight:400;">(MP3/WAV, 5–30 seconds, one clear speaker, no music)</span></label>
+        <div class="drop">
+          <input type="file" id="refInput" accept="audio/*,.mp3,.wav,.m4a,.ogg">
+          <strong style="color:var(--text);">Upload voice sample</strong> · the voice you want to sound like
+        </div>
+        <audio id="refAudio" controls style="width:100%; margin-top:10px; display:none;"></audio>
+        <div class="hint" id="refInfo"></div>
+        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:12px; font-size:12px; color:var(--text2); cursor:pointer;">
+          <input type="checkbox" id="consentChk" style="margin-top:2px;">
+          <span>I confirm I have permission to use this voice.</span>
+        </label>
+        <div class="hint">Pitch is matched automatically for cloned voices.</div>
       </div>
     </div>
 
@@ -123,9 +137,10 @@
     const currentEmail = session ? session.email : null;
 
     const MAX_SEC = 120;
-    let rvcUrl = null, serverUp = false, coinBalance = 0, recordRate = 0.3;
+    let rvcUrl = null, serverUp = false, cloneUp = false, coinBalance = 0, recordRate = 0.3;
     let mediaRec = null, chunks = [], micStream = null, timerInt = null, secs = 0;
     let srcBuffer = null, srcDuration = 0, resultBlob = null, busy = false;
+    let refFile = null;   // uploaded voice sample for cloning
 
     function showToast(msg, type = 'info', dur = 4000) {
       const t = document.getElementById('toast');
@@ -165,17 +180,38 @@
           sel.appendChild(o);
         });
         if (!sel.options.length) sel.innerHTML = '<option value="">No voices available</option>';
+        const oc = document.createElement('option');
+        oc.value = '__clone__'; oc.id = 'cloneOpt';
+        oc.textContent = '🎤 Clone from a voice sample (upload below)';
+        sel.appendChild(oc);
       } catch (_) {}
       if (rvcUrl) {
-        try {
-          const h = await fetch(rvcUrl.replace(/\/+$/, '') + '/health', { headers: { 'ngrok-skip-browser-warning': 'true' } });
-          serverUp = h.ok;
-        } catch (_) { serverUp = false; }
+        const base = rvcUrl.replace(/\/+$/, '');
+        const hdrs = { headers: { 'ngrok-skip-browser-warning': 'true' } };
+        try { serverUp = (await fetch(base + '/health', hdrs)).ok; } catch (_) { serverUp = false; }
+        try { const c = await fetch(base + '/clone/health', hdrs); cloneUp = c.ok && (await c.json()).ok === true; } catch (_) { cloneUp = false; }
       }
+      const cloneOpt = document.getElementById('cloneOpt');
+      if (cloneOpt && !cloneUp) { cloneOpt.disabled = true; cloneOpt.textContent += ' — offline'; }
       document.getElementById('offlineNote').style.display = serverUp ? 'none' : 'block';
       updateUI();
     }
     init();
+
+    // ── cloning: reference sample upload ──
+    document.getElementById('refInput').addEventListener('change', async e => {
+      const f = e.target.files[0]; e.target.value = '';
+      if (!f) return;
+      const ok = f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm|aac|flac)$/i.test(f.name);
+      if (!ok) { showToast('Please choose an audio file.', 'error'); return; }
+      if (f.size > 15 * 1024 * 1024) { showToast('Sample too large (max 15MB).', 'error'); return; }
+      refFile = f;
+      const a = document.getElementById('refAudio');
+      a.src = URL.createObjectURL(f); a.style.display = 'block';
+      document.getElementById('refInfo').textContent = f.name;
+      updateUI();
+    });
+    document.getElementById('consentChk').addEventListener('change', updateUI);
 
     // ── record ──
     async function recStart() {
@@ -230,9 +266,14 @@
     }
 
     function updateUI() {
+      const isClone = document.getElementById('voiceSelect').value === '__clone__';
+      document.getElementById('pitchBlock').style.display = isClone ? 'none' : 'block';
+      document.getElementById('cloneBlock').style.display = isClone ? 'block' : 'none';
       const cost = srcDuration ? Math.ceil(srcDuration * recordRate) : 0;
       document.getElementById('costNum').textContent = cost ? `${cost.toLocaleString()} coins` : '—';
-      document.getElementById('convBtn').disabled = !(serverUp && srcBuffer && !busy && document.getElementById('voiceSelect').value);
+      let ready = serverUp && srcBuffer && !busy && document.getElementById('voiceSelect').value;
+      if (isClone) ready = ready && cloneUp && refFile && document.getElementById('consentChk').checked;
+      document.getElementById('convBtn').disabled = !ready;
     }
     document.getElementById('voiceSelect').addEventListener('change', updateUI);
 
@@ -262,6 +303,10 @@
       if (busy || !srcBuffer) return;
       const voice = document.getElementById('voiceSelect').value;
       if (!voice) { showToast('Pick a target voice.', 'error'); return; }
+      const isClone = voice === '__clone__';
+      if (isClone && (!refFile || !document.getElementById('consentChk').checked)) {
+        showToast('Upload a voice sample and confirm you have permission.', 'error'); return;
+      }
       const cost = Math.ceil(srcDuration * recordRate);
       if (coinBalance < cost) { showToast(`Need ${cost} coins (you have ${Math.floor(coinBalance)}). Please top up.`, 'error', 6000); return; }
 
@@ -270,10 +315,18 @@
       document.getElementById('resultBox').style.display = 'none';
       try {
         const fd = new FormData();
-        fd.append('voice', voice);
-        fd.append('pitch', String(parseInt(document.getElementById('vsPitch').value) || 0));
-        fd.append('file', toWav(srcBuffer), 'recording.wav');
-        const res = await fetch(rvcUrl.replace(/\/+$/, '') + '/convert', {
+        let endpoint;
+        if (isClone) {
+          endpoint = '/clone/convert';
+          fd.append('source', toWav(srcBuffer), 'recording.wav');
+          fd.append('reference', refFile, refFile.name || 'reference.wav');
+        } else {
+          endpoint = '/convert';
+          fd.append('voice', voice);
+          fd.append('pitch', String(parseInt(document.getElementById('vsPitch').value) || 0));
+          fd.append('file', toWav(srcBuffer), 'recording.wav');
+        }
+        const res = await fetch(rvcUrl.replace(/\/+$/, '') + endpoint, {
           method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }, body: fd
         });
         if (!res.ok) {
@@ -330,7 +383,8 @@
       } catch (_) {}
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      const vName = document.getElementById('voiceSelect').selectedOptions[0]?.textContent || 'voice';
+      const sel = document.getElementById('voiceSelect');
+      const vName = sel.value === '__clone__' ? 'cloned' : (sel.selectedOptions[0]?.textContent || 'voice');
       a.download = `vnvpro-${vName.replace(/\s+/g, '_').toLowerCase()}.${ext}`;
       document.body.appendChild(a); a.click(); a.remove();
     }

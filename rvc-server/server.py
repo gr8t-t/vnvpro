@@ -46,6 +46,7 @@ DEVICE      = "cuda:0"          # set to "cpu" if no NVIDIA GPU
 OUTPUT_SR   = 48000             # rvc-python outputs 48 kHz mono
 INPUT_SR    = 16000             # what the browser sends us
 WOKADA_URL  = "http://127.0.0.1:18000"   # local w-okada (Voice 2.0). 127.0.0.1 (not "localhost") avoids the ~2s IPv6-resolution stall in requests
+CLONE_URL   = "http://127.0.0.1:18100"   # local Seed-VC clone server (zero-shot voice cloning)
 
 # Real-time tuning (seconds) — Voice 1.0 (Standard)
 BLOCK_SEC      = 1.00           # audio gathered before each conversion (lower = less delay)
@@ -198,6 +199,17 @@ async def convert(voice: str = Form(...), pitch: int = Form(0), file: UploadFile
                 pass
 
 
+async def _edge_synth(text, base):
+    """Synthesize text with edge-tts. Returns MP3 bytes (raises on failure)."""
+    import edge_tts
+    buf = io.BytesIO()
+    com = edge_tts.Communicate(text, base)
+    async for chunk in com.stream():
+        if chunk["type"] == "audio":
+            buf.write(chunk["data"])
+    return buf.getvalue()
+
+
 @app.post("/tts")
 async def tts(request: Request):
     """Text-to-Speech: edge-tts neural synth, optionally converted through an
@@ -219,16 +231,10 @@ async def tts(request: Request):
     voice = data.get("voice") or None
     pitch = int(data.get("pitch") or 0)
 
-    import edge_tts
-    buf = io.BytesIO()
     try:
-        com = edge_tts.Communicate(text, base)
-        async for chunk in com.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
+        mp3 = await _edge_synth(text, base)
     except Exception as e:
         return JSONResponse(status_code=502, content={"error": f"TTS synth failed: {e}"})
-    mp3 = buf.getvalue()
     if not mp3:
         return JSONResponse(status_code=502, content={"error": "TTS produced no audio"})
 
@@ -256,6 +262,84 @@ async def tts(request: Request):
         w.setframerate(out_sr)
         w.writeframes(pcm.tobytes())
     return Response(content=wb.getvalue(), media_type="audio/wav")
+
+
+# ── Voice cloning (Seed-VC) proxy ─────────────────────────────────────────────
+# Zero-shot cloning: users upload a 5-30s sample of a voice, and their recording
+# (or TTS narration) is converted into THAT voice. The Seed-VC server (18100) is
+# local-only, so we proxy it here for CORS + one tunnel, like w-okada (/v2/*).
+
+@app.get("/clone/health")
+def clone_health():
+    """Is the Seed-VC clone server up (and are its models loaded)?"""
+    try:
+        r = requests.get(f"{CLONE_URL}/health", timeout=5)
+        return {"ok": r.status_code == 200 and r.json().get("ok") is True}
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"ok": False, "error": str(e)})
+
+
+@app.post("/clone/convert")
+async def clone_convert(source: UploadFile = File(...), reference: UploadFile = File(...)):
+    """Convert `source` speech into the voice of the `reference` sample."""
+    src = await source.read()
+    ref = await reference.read()
+
+    def _do():
+        return requests.post(f"{CLONE_URL}/convert", files={
+            "source": (source.filename or "source.wav", src, "application/octet-stream"),
+            "reference": (reference.filename or "reference.wav", ref, "application/octet-stream"),
+        }, timeout=600)
+
+    try:
+        r = await asyncio.get_event_loop().run_in_executor(None, _do)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"clone server unreachable: {e}"})
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("error", r.text[:200])
+        except Exception:
+            detail = r.text[:200]
+        return JSONResponse(status_code=502, content={"error": detail})
+    return Response(content=r.content, media_type="audio/wav")
+
+
+@app.post("/tts_clone")
+async def tts_clone(text: str = Form(...), base: str = Form("en-US-JennyNeural"),
+                    reference: UploadFile = File(...)):
+    """Text-to-Speech in a CLONED voice: edge-tts narrates the text, then the
+    Seed-VC server converts the narration into the uploaded reference voice."""
+    text = (text or "").strip()
+    if not text:
+        return JSONResponse(status_code=400, content={"error": "text required"})
+    if len(text) > 1200:
+        return JSONResponse(status_code=400, content={"error": "text too long (max 1200 characters)"})
+    try:
+        mp3 = await _edge_synth(text, base)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"TTS synth failed: {e}"})
+    if not mp3:
+        return JSONResponse(status_code=502, content={"error": "TTS produced no audio"})
+
+    ref = await reference.read()
+
+    def _do():
+        return requests.post(f"{CLONE_URL}/convert", files={
+            "source": ("narration.mp3", mp3, "application/octet-stream"),
+            "reference": (reference.filename or "reference.wav", ref, "application/octet-stream"),
+        }, timeout=600)
+
+    try:
+        r = await asyncio.get_event_loop().run_in_executor(None, _do)
+    except Exception as e:
+        return JSONResponse(status_code=502, content={"error": f"clone server unreachable: {e}"})
+    if r.status_code != 200:
+        try:
+            detail = r.json().get("error", r.text[:200])
+        except Exception:
+            detail = r.text[:200]
+        return JSONResponse(status_code=502, content={"error": detail})
+    return Response(content=r.content, media_type="audio/wav")
 
 
 # ── WebSocket: real-time streaming ────────────────────────────────────────────
