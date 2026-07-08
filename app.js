@@ -30,6 +30,8 @@ let currentEmail = null;
 let coinBalance = 0;
 let realtimeClient = null;
 let referenceFile = null;
+let backgroundFile = null;       // optional uploaded background (composited behind the avatar)
+let bgRemovalMod = null;         // lazy-loaded @imgly/background-removal module
 let setupAllowed = false;        // admin permits Setup Mode for this user (from balance)
 let setupActive = false;         // user has Setup Mode toggled on (free, no Decart, no coins)
 let setupCanvasStream = null;    // image-as-video stream fed into the SAME output surface as Decart
@@ -194,6 +196,35 @@ function setupVideoControls() {
       settingsApplied = false;
     });
   }
+
+  // Optional background image (composited behind the avatar)
+  const bgUpload = document.getElementById('bgUpload');
+  if (bgUpload) {
+    bgUpload.addEventListener('change', () => { if (bgUpload.files[0]) handleBgFile(bgUpload.files[0]); });
+  }
+  const removeBg = document.getElementById('removeBg');
+  if (removeBg) {
+    removeBg.addEventListener('click', () => {
+      backgroundFile = null;
+      document.getElementById('bgPreview').src = '';
+      document.getElementById('bgPreviewWrap').style.display = 'none';
+      document.getElementById('bgUploadZone').style.display = 'block';
+      if (bgUpload) bgUpload.value = '';
+      settingsApplied = false;
+    });
+  }
+}
+
+function handleBgFile(file) {
+  if (!file.type.startsWith('image/')) { showToast('Please upload an image file.', 'error'); return; }
+  if (file.size > 10 * 1024 * 1024)   { showToast('Image too large. Max 10MB.', 'error'); return; }
+  compressImage(file, 1280).then(compressed => {
+    backgroundFile = compressed;
+    document.getElementById('bgPreview').src = URL.createObjectURL(compressed);
+    document.getElementById('bgPreviewWrap').style.display = 'block';
+    document.getElementById('bgUploadZone').style.display = 'none';
+    settingsApplied = false;
+  });
 }
 
 function handleImageFile(file) {
@@ -635,9 +666,8 @@ function setMode(m) {
   mode = m;
 
   // Update buttons
-  document.getElementById('modeVideoBtn').classList.toggle('active', m === 'video');
-  document.getElementById('modeBothBtn').classList.toggle('active', m === 'both');
-  document.getElementById('modeAudioBtn').classList.toggle('active', m === 'audio');
+  const modeSelect = document.getElementById('modeSelect');
+  if (modeSelect && modeSelect.value !== m) modeSelect.value = m;
 
   // Update badge
   const badge = document.getElementById('modeBadge');
@@ -1126,6 +1156,53 @@ function stopSetupVideo() {
   }
 }
 
+// Load an image Blob/File into an <img>
+function blobToImage(blob) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => { resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.src = url;
+  });
+}
+
+// Draw an image to fill w×h (cover), centered
+function drawCover(ctx, img, w, h) {
+  const r = Math.max(w / img.width, h / img.height);
+  const iw = img.width * r, ih = img.height * r;
+  ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+}
+
+// Produce the single reference image to send to Decart. With an optional
+// background, we cut the person out of the face image and composite them over
+// the background at full resolution (face kept large & sharp -> Decart's
+// identity quality is preserved), since Decart only accepts one image.
+async function buildReferenceImage() {
+  if (!backgroundFile || !referenceFile) return referenceFile;
+  try {
+    showToast('Preparing your background… (first time downloads a small model)', 'info', 6000);
+    if (!bgRemovalMod) {
+      const m = await import('https://esm.sh/@imgly/background-removal@1.5.8');
+      bgRemovalMod = m.removeBackground || (m.default && m.default.removeBackground) || m.default || m;
+    }
+    const removeBackground = bgRemovalMod.removeBackground || bgRemovalMod;
+    const cutoutBlob = await removeBackground(referenceFile);        // transparent PNG of the person
+    const [bgImg, personImg] = await Promise.all([blobToImage(backgroundFile), blobToImage(cutoutBlob)]);
+    const W = 1280, H = 720;
+    const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    drawCover(ctx, bgImg, W, H);                                     // new background fills the frame
+    const scale = (H * 0.96) / personImg.height;                    // person nearly full height, centered
+    const pw = personImg.width * scale, ph = personImg.height * scale;
+    ctx.drawImage(personImg, (W - pw) / 2, H - ph, pw, ph);
+    return await new Promise(res => canvas.toBlob(b => res(b || referenceFile), 'image/jpeg', 0.95));
+  } catch (e) {
+    showToast('Could not process the background — using your face image only.', 'error', 6000);
+    return referenceFile;
+  }
+}
+
 async function applyVideoSettings(initial) {
   if (!realtimeClient) {
     if (!initial) showToast('Start streaming first.', 'info');
@@ -1136,8 +1213,11 @@ async function applyVideoSettings(initial) {
   const payload = { enhance };
   if (prompt) payload.prompt = prompt;
   if (referenceFile && !settingsApplied) {
-    payload.image = referenceFile;
-    if (!prompt) payload.prompt = 'Transform my face and body to look exactly like the person in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
+    payload.image = await buildReferenceImage();
+    const usingBg = !!backgroundFile;
+    if (!prompt) payload.prompt = usingBg
+      ? 'Transform my face and body to look exactly like the person in the reference image, and place me in the same background scene shown behind them in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Only change my appearance and the background.'
+      : 'Transform my face and body to look exactly like the person in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
   }
   try {
     await realtimeClient.set(payload);
