@@ -1237,6 +1237,56 @@ async function applyVideoSettings(initial) {
 // (sent concurrently, not one-at-a-time) so the tunnel's round-trip latency
 // overlaps instead of stacking; responses are played back in timestamp order
 // through the jitter buffer.
+// ─── MIC GUARD + NOISE GATE (echo protection) ─────────────────────────────────
+// The caller can only ever hear themselves if THEIR voice gets into OUR mic
+// input and is converted. Two doors, both closed here:
+//  1) Windows per-app overrides can silently redirect Chrome's default mic to a
+//     virtual/loopback device (NDI Webcam Audio, CABLE Output, Stereo Mix,
+//     Voicemod…) that carries the call's own audio. getSafeMicStream() detects
+//     that and re-grabs a real microphone explicitly by deviceId — explicit
+//     device requests bypass Windows' default-device redirects entirely.
+//  2) The far end's voice can bleed faintly into a wired headset mic
+//     (electrical crosstalk / earpiece leakage). makeNoiseGate() mutes anything
+//     far below direct-speech level BEFORE it reaches the converter. Direct
+//     speech passes untouched — no model/quality change, quiet junk is silenced.
+const BAD_MIC_RE = /cable|vb-?audio|virtual|ndi|webcam|web camera|stereo mix|what u hear|loopback|monitor|voicemod/i;
+
+async function getSafeMicStream(audioConstraints) {
+  let stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+  const label = (stream.getAudioTracks()[0] || {}).label || '';
+  if (!BAD_MIC_RE.test(label)) return stream;
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const real = devs.find(d => d.kind === 'audioinput'
+      && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications'
+      && d.label && !BAD_MIC_RE.test(d.label));
+    if (real) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { ...audioConstraints, deviceId: { exact: real.deviceId } }, video: false
+      });
+      showToast(`Mic was "${label}" (loops call audio) — switched to "${real.label}".`, 'info');
+      return stream;
+    }
+  } catch (_) {}
+  showToast(`Mic is "${label}" — a virtual device that echoes the call back. Select your real microphone in Windows sound settings.`, 'error');
+  return stream;
+}
+
+const GATE_OPEN_RMS  = 0.010;  // ~-40 dBFS; direct speech is typically 5-20x louder
+const GATE_CLOSE_RMS = 0.005;  // hysteresis so held notes don't flutter
+const GATE_HANG_SEC  = 0.5;    // stay open through natural pauses between words
+function makeNoiseGate(sampleRate) {
+  let open = false, hang = 0;
+  return (block) => {
+    let s = 0; for (let i = 0; i < block.length; i++) s += block[i] * block[i];
+    const rms = Math.sqrt(s / block.length);
+    if (rms >= GATE_OPEN_RMS) { open = true; hang = GATE_HANG_SEC * sampleRate; }
+    else if (open) { hang -= block.length; if (hang <= 0 && rms < GATE_CLOSE_RMS) open = false; }
+    if (!open) block.fill(0);
+  };
+}
+
 const V2_RATE = 16000;
 const V2_CHUNK = 8000;    // 0.5s @ 16k per request
 async function startV2Pipeline(voice) {
@@ -1259,14 +1309,12 @@ async function startV2Pipeline(voice) {
   audioCtx = new AudioContext({ sampleRate: V2_RATE });
   playbackCtx = new AudioContext({ sampleRate: V2_RATE });
   nextPlayTime = 0;
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: true },
-    video: false
-  });
+  micStream = await getSafeMicStream({ echoCancellation: true, autoGainControl: false, noiseSuppression: true });
   const source = audioCtx.createMediaStreamSource(micStream);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 256;
   source.connect(analyser);
+  const gate = makeNoiseGate(V2_RATE);
 
   const statusEl = document.getElementById('voiceStatusText');
   if (statusEl) statusEl.textContent = `Voice 2.0 active: ${voice.name}`;
@@ -1336,6 +1384,7 @@ async function startV2Pipeline(voice) {
   processor.onaudioprocess = (e) => {
     if (!isStreaming) return;
     const inb = e.inputBuffer.getChannelData(0);
+    gate(inb);   // mute sub-speech-level bleed before it can be converted
     const merged = new Float32Array(acc.length + inb.length);
     merged.set(acc); merged.set(inb, acc.length);
     acc = merged;
@@ -1389,16 +1438,14 @@ async function startAudioPipeline(voice) {
   audioCtx = new AudioContext({ sampleRate: 16000 });
   playbackCtx = new AudioContext({ sampleRate: RVC_OUTPUT_SR });
   nextPlayTime = 0;
-  micStream = await navigator.mediaDevices.getUserMedia({
-    // echoCancellation MUST be on: the converted voice plays out the speakers,
-    // and without AEC the mic re-captures it, the server re-converts it, and it
-    // loops/stacks — the "repeating continuously" bug. AEC cancels that playback
-    // out of the mic signal (same as video calls) while keeping your dry voice.
-    audio: { echoCancellation: true, autoGainControl: false, noiseSuppression: true },
-    video: false
-  });
+  // echoCancellation MUST be on: the converted voice plays out the speakers,
+  // and without AEC the mic re-captures it, the server re-converts it, and it
+  // loops/stacks — the "repeating continuously" bug. AEC cancels that playback
+  // out of the mic signal (same as video calls) while keeping your dry voice.
+  micStream = await getSafeMicStream({ echoCancellation: true, autoGainControl: false, noiseSuppression: true });
 
   const source = audioCtx.createMediaStreamSource(micStream);
+  const gate = makeNoiseGate(16000);
 
   // Analyser for level meter
   analyser = audioCtx.createAnalyser();
@@ -1410,6 +1457,7 @@ async function startAudioPipeline(voice) {
   processor.onaudioprocess = (e) => {
     if (!rvcWs || rvcWs.readyState !== WebSocket.OPEN) return;
     const float32 = e.inputBuffer.getChannelData(0);
+    gate(float32);   // mute sub-speech-level bleed before it can be converted
     const int16 = new Int16Array(float32.length);
     for (let i = 0; i < float32.length; i++) {
       int16[i] = Math.max(-32768, Math.min(32767, float32[i] * 32767));
