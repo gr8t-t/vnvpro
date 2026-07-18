@@ -67,7 +67,12 @@ Start-Process cmd -ArgumentList '/k', "title VNV - Voice 1.0 (RVC server) && cd 
 #    latency from Nigeria, and no request/bandwidth limits). It gets a fresh free
 #    random URL each run, which we auto-push to admin below so you never paste it.
 Write-Host 'Starting Cloudflare Tunnel...'
-Start-Process cmd -ArgumentList '/k', "title VNV - Cloudflare Tunnel && echo Cloudflare Tunnel is running. Keep this window open while users are online. && `"$CloudflaredExe`" tunnel --url http://127.0.0.1:$Port --logfile `"$CfLog`""
+#    --protocol http2   : TCP transport instead of QUIC/UDP - avoids the Windows UDP
+#                         buffer bug ("wsasendto: system lacked sufficient buffer space")
+#                         that wedged the tunnel into a permanent retry loop on 2026-07-18.
+#    --edge-ip-version 4: the laptop's IPv6 is flaky (every "unreachable network" error
+#                         in that incident was an IPv6 edge IP) - stick to IPv4.
+Start-Process cmd -ArgumentList '/k', "title VNV - Cloudflare Tunnel && echo Cloudflare Tunnel is running. Keep this window open while users are online. && `"$CloudflaredExe`" tunnel --url http://127.0.0.1:$Port --protocol http2 --edge-ip-version 4 --logfile `"$CfLog`""
 
 # 4) Wait for cloudflared to write its public https URL to the logfile, then read
 #    it with a SHARED read (cloudflared keeps the file open, so a plain Get-Content
