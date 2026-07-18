@@ -23,6 +23,7 @@ let micStream = null;
 let processor = null;
 const RVC_OUTPUT_SR = 48000;
 const PREROLL_SEC = 0.5;   // jitter-buffer cushion before playback — absorbs network/inference jitter so audio doesn't starve & crack (measured: underruns 29 -> 3)
+const MAX_V2_LEAD = 3.0;   // hard cap on Voice 2.0 playback delay — if the buffered lead drifts past this (bursts / voice-switch reloads), drop the backlog and resync so latency can't grow to 10-12s
 let lastBilledSeconds = 0;
 let decartApiKey = null;
 let keyLoadPromise = null;
@@ -1275,19 +1276,30 @@ async function startV2Pipeline(voice) {
   let expectedTs = 0;           // next ts to play, so we play strictly in order
   const outBuf = new Map();     // ts -> Float32Array (converted, awaiting its turn)
   let outputLevel = 0;
+  let scheduled = [];           // {src, end} of queued playback nodes, for catch-up
 
   function schedule(f32) {
     if (!playbackCtx) return;
     let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i];
     outputLevel = Math.min(100, Math.sqrt(s / f32.length) * 300);
+    const now = playbackCtx.currentTime;
+    // Latency guard: if the buffered lead has ballooned (bursts, voice-switch
+    // reloads), stop the pending backlog and resync to a small lead so the
+    // delay can't creep up to 10-12s over a session.
+    if (nextPlayTime - now > MAX_V2_LEAD) {
+      for (const it of scheduled) { if (it.end > now) { try { it.src.stop(); } catch (_) {} } }
+      scheduled = [];
+      nextPlayTime = 0;   // forces the reset branch below
+    }
     const b = playbackCtx.createBuffer(1, f32.length, V2_RATE);
     b.getChannelData(0).set(f32);
     const src = playbackCtx.createBufferSource();
     src.buffer = b; src.connect(playbackCtx.destination);
-    const now = playbackCtx.currentTime;
     const startAt = (nextPlayTime <= now + 0.001) ? now + PREROLL_SEC : nextPlayTime;
     src.start(startAt);
     nextPlayTime = startAt + b.duration;
+    scheduled.push({ src, end: nextPlayTime });
+    if (scheduled.length > 48) scheduled = scheduled.filter(it => it.end > now - 0.5);
   }
 
   function flush() {
@@ -1410,6 +1422,7 @@ async function startAudioPipeline(voice) {
 
   // RVC output
   let outputLevel = 0;
+  let scheduled = [];           // {src, end} of queued playback nodes, for catch-up
   rvcWs.onmessage = async (e) => {
     if (!isStreaming) return;
     try {
@@ -1440,6 +1453,13 @@ async function startAudioPipeline(voice) {
       // right after the previous chunk; the start time is never moved backward, so
       // converted audio can never overlap/stack on itself.
       const now = playbackCtx.currentTime;
+      // Latency guard (same as Voice 2.0): if the buffered lead balloons, drop
+      // the backlog and resync so the delay can't creep up over a session.
+      if (nextPlayTime - now > MAX_V2_LEAD) {
+        for (const it of scheduled) { if (it.end > now) { try { it.src.stop(); } catch (_) {} } }
+        scheduled = [];
+        nextPlayTime = 0;
+      }
       let startAt;
       if (nextPlayTime <= now + 0.001) {
         startAt = now + PREROLL_SEC;
@@ -1448,6 +1468,8 @@ async function startAudioPipeline(voice) {
       }
       src.start(startAt);
       nextPlayTime = startAt + buffer.duration;
+      scheduled.push({ src, end: nextPlayTime });
+      if (scheduled.length > 48) scheduled = scheduled.filter(it => it.end > now - 0.5);
     } catch (_) {}
   };
 
