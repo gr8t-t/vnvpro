@@ -1,10 +1,12 @@
 # ============================================================
-#  VNV Pro - ONE-CLICK LAUNCHER  (Option A: permanent ngrok domain)
-#  Starts ALL THREE servers and points the website at your
-#  permanent ngrok address so you never paste a URL again.
+#  VNV Pro - ONE-CLICK LAUNCHER
+#  Starts all servers + a Cloudflare Tunnel and auto-points the
+#  website at it, so you never paste a URL. (Switched from ngrok
+#  to Cloudflare - much lower latency from Nigeria, no limits.)
 #    1) w-okada      (Voice 2.0, port 18000)
-#    2) RVC server   (Voice 1.0, port 8765)
-#    3) ngrok        (tunnel on 8765, your permanent domain)
+#    2) Seed-VC      (Voice Clone, port 18100)
+#    3) RVC server   (Voice 1.0 + proxy, port 8765)
+#    4) Cloudflare Tunnel (on 8765, fresh URL each run, auto-set)
 #  Just double-click START-VNVPRO.bat (which runs this).
 # ============================================================
 
@@ -17,16 +19,12 @@ $Port          = 8765
 $WokadaPort    = 18000
 $CloneDir      = 'C:\Users\USER\seed-vc'
 $ClonePort     = 18100
+$CloudflaredExe = 'C:\Users\USER\cloudflared\cloudflared.exe'   # tunnel (replaced ngrok - lower latency from Nigeria, no limits)
+$CfLog          = Join-Path $env:TEMP 'vnv_cloudflared.log'
 
-# Your PERMANENT ngrok domain (Option A). Paste the bare domain only -
-# e.g.  tough-cat-1234.ngrok-free.app   (NO https://, no slash).
-# Get it once at https://dashboard.ngrok.com/domains  then paste here.
-# Leave it as '' to fall back to a random URL.
-$NgrokDomain   = 'exerciser-overvalue-stoppable.ngrok-free.dev'
+# (Old ngrok domain, kept only for reference in case you ever revert:
+#  exerciser-overvalue-stoppable.ngrok-free.dev)
 # -------------------------------------------------------------
-
-$NgrokDomain = $NgrokDomain.Trim()
-if ($NgrokDomain) { $NgrokDomain = ($NgrokDomain -replace '^https?://','') -replace '/+$','' }
 
 Write-Host '============================================================'
 Write-Host '   VNV Pro - starting everything in one go'
@@ -41,6 +39,8 @@ foreach ($p in @($Port, $WokadaPort, $ClonePort)) {
   } catch {}
 }
 Get-Process ngrok -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Remove-Item $CfLog -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 800
 
 # 1) Start w-okada (Voice 2.0) in its own window
@@ -63,33 +63,27 @@ if (Test-Path (Join-Path $CloneDir 'clone_server.py')) {
 Write-Host 'Starting Voice 1.0 (RVC server)...'
 Start-Process cmd -ArgumentList '/k', "title VNV - Voice 1.0 (RVC server) && cd /d `"$RvcDir`" && venv\Scripts\python.exe server.py"
 
-# 3) Start ngrok in its own window (permanent domain if set, else random)
-if ($NgrokDomain) {
-  Write-Host "Starting ngrok on your permanent domain: $NgrokDomain"
-  Start-Process cmd -ArgumentList '/k', "title VNV - ngrok && ngrok http --url=https://$NgrokDomain $Port"
-} else {
-  Write-Host 'Starting ngrok (random URL - no permanent domain set yet)...' -ForegroundColor Yellow
-  Start-Process cmd -ArgumentList '/k', "title VNV - ngrok && ngrok http $Port"
-}
+# 3) Start the Cloudflare Tunnel in its own window (replaces ngrok - far lower
+#    latency from Nigeria, and no request/bandwidth limits). It gets a fresh free
+#    random URL each run, which we auto-push to admin below so you never paste it.
+Write-Host 'Starting Cloudflare Tunnel...'
+Start-Process cmd -ArgumentList '/k', "title VNV - Cloudflare Tunnel && echo Cloudflare Tunnel is running. Keep this window open while users are online. && `"$CloudflaredExe`" tunnel --url http://127.0.0.1:$Port > `"$CfLog`" 2>&1"
 
-# 4) Wait for ngrok's local API, then read the public https URL
-Write-Host 'Waiting for the ngrok tunnel to come up...'
+# 4) Wait for cloudflared to print its public https URL, then read it from the log
+Write-Host 'Waiting for the Cloudflare Tunnel to come up...'
 $publicUrl = $null
-for ($i = 0; $i -lt 30; $i++) {
+for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Seconds 2
-  try {
-    $t = Invoke-RestMethod -Uri 'http://127.0.0.1:4040/api/tunnels' -TimeoutSec 3
-    $https = $t.tunnels | Where-Object { $_.public_url -like 'https://*' } | Select-Object -First 1
-    if ($https) { $publicUrl = $https.public_url; break }
-  } catch {}
+  if (Test-Path $CfLog) {
+    $m = [regex]::Match((Get-Content $CfLog -Raw -ErrorAction SilentlyContinue), 'https://[a-z0-9-]+\.trycloudflare\.com')
+    if ($m.Success) { $publicUrl = $m.Value; break }
+  }
 }
-# With a permanent domain we know the URL even if the local API was slow
-if (-not $publicUrl -and $NgrokDomain) { $publicUrl = "https://$NgrokDomain" }
 
 if (-not $publicUrl) {
   Write-Host ''
-  Write-Host 'Could not auto-detect the ngrok URL. Open the ngrok window, copy the' -ForegroundColor Yellow
-  Write-Host 'https://... address, and paste it into Admin > Settings > RVC Server URL.' -ForegroundColor Yellow
+  Write-Host 'Could not auto-detect the Cloudflare URL. Open the Cloudflare Tunnel window/log' -ForegroundColor Yellow
+  Write-Host 'and copy the https://...trycloudflare.com address into Admin > RVC Server URL.' -ForegroundColor Yellow
   Read-Host 'Press Enter to close'
   exit
 }
