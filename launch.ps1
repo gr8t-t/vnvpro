@@ -67,16 +67,23 @@ Start-Process cmd -ArgumentList '/k', "title VNV - Voice 1.0 (RVC server) && cd 
 #    latency from Nigeria, and no request/bandwidth limits). It gets a fresh free
 #    random URL each run, which we auto-push to admin below so you never paste it.
 Write-Host 'Starting Cloudflare Tunnel...'
-Start-Process cmd -ArgumentList '/k', "title VNV - Cloudflare Tunnel && echo Cloudflare Tunnel is running. Keep this window open while users are online. && `"$CloudflaredExe`" tunnel --url http://127.0.0.1:$Port > `"$CfLog`" 2>&1"
+Start-Process cmd -ArgumentList '/k', "title VNV - Cloudflare Tunnel && echo Cloudflare Tunnel is running. Keep this window open while users are online. && `"$CloudflaredExe`" tunnel --url http://127.0.0.1:$Port --logfile `"$CfLog`""
 
-# 4) Wait for cloudflared to print its public https URL, then read it from the log
+# 4) Wait for cloudflared to write its public https URL to the logfile, then read
+#    it with a SHARED read (cloudflared keeps the file open, so a plain Get-Content
+#    can hit a sharing violation and silently fail - that was breaking the auto-update).
 Write-Host 'Waiting for the Cloudflare Tunnel to come up...'
 $publicUrl = $null
 for ($i = 0; $i -lt 40; $i++) {
   Start-Sleep -Seconds 2
   if (Test-Path $CfLog) {
-    $m = [regex]::Match((Get-Content $CfLog -Raw -ErrorAction SilentlyContinue), 'https://[a-z0-9-]+\.trycloudflare\.com')
-    if ($m.Success) { $publicUrl = $m.Value; break }
+    try {
+      $fs = [System.IO.File]::Open($CfLog, 'Open', 'Read', 'ReadWrite')
+      $sr = New-Object System.IO.StreamReader($fs)
+      $txt = $sr.ReadToEnd(); $sr.Close(); $fs.Close()
+      $m = [regex]::Match($txt, 'https://[a-z0-9-]+\.trycloudflare\.com')
+      if ($m.Success) { $publicUrl = $m.Value; break }
+    } catch {}
   }
 }
 
