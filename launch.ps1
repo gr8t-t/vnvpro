@@ -30,16 +30,23 @@ Write-Host '============================================================'
 Write-Host '   VNV Pro - starting everything in one go'
 Write-Host '============================================================'
 
-# 0) Free the ports so we never hit "only one usage of each socket address"
-Write-Host 'Clearing any previous server/ngrok instances...'
+# 0) Close EVERYTHING from the previous run automatically - the old "VNV - ..."
+#    cmd windows AND every process they started (/T kills the whole tree:
+#    python servers, w-okada main.exe + its GUI client, cloudflared). Re-running
+#    this launcher never leaves stale windows to close by hand.
+Write-Host 'Closing previous VNV server windows...'
+cmd /c 'taskkill /F /T /FI "WINDOWTITLE eq VNV - *" >nul 2>&1'
+Start-Sleep -Milliseconds 500
+# Backup sweep: anything still holding our ports (e.g. a server started by hand)
 foreach ($p in @($Port, $WokadaPort, $ClonePort)) {
   try {
     Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue |
       ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
   } catch {}
 }
-Get-Process ngrok -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+foreach ($n in @('ngrok', 'cloudflared', 'voice-changer-native-client')) {
+  Get-Process $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+}
 Remove-Item $CfLog -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 800
 
@@ -105,6 +112,7 @@ Write-Host "Tunnel URL: $publicUrl"
 
 # 5) Push it to the website's admin so voice goes live with no manual step
 Write-Host 'Updating your website automatically...'
+$launchOk = $false
 try {
   $body = @{ action = 'set_rvc_url'; password = $AdminPassword; url = $publicUrl } | ConvertTo-Json
   Invoke-RestMethod -Uri $AdminApi -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 15 | Out-Null
@@ -114,6 +122,7 @@ try {
   Write-Host '   finish loading (w-okada takes ~30-60s the first time).' -ForegroundColor Green
   Write-Host '   Keep the server windows open while users are online.' -ForegroundColor Green
   Write-Host '============================================================' -ForegroundColor Green
+  $launchOk = $true
 } catch {
   Write-Host ''
   Write-Host "Auto-update failed: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -122,4 +131,12 @@ try {
 }
 
 Write-Host ''
-Read-Host 'Press Enter to close this launcher window (the three server windows stay open)'
+if ($launchOk) {
+  # Success: close this window by itself so windows never pile up.
+  Write-Host 'All good - this launcher window closes itself in 8 seconds.'
+  Write-Host '(The four VNV server windows stay open - that is normal.)'
+  Start-Sleep -Seconds 8
+} else {
+  # Something failed above: stay open so the message can be read.
+  Read-Host 'Press Enter to close this launcher window (the server windows stay open)'
+}
