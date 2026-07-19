@@ -15,6 +15,21 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
+# Keep-awake: while this panel is open, Windows is told the SYSTEM must not
+# auto-sleep (the screen may still turn off - that's fine). Auto-sleep was the
+# root cause of "always offline": free quick tunnels get invalidated on
+# Cloudflare's side during sleep ("Unauthorized: Tunnel not found") and
+# cloudflared can never re-register them - it retries a dead tunnel forever.
+# NOTE: closing the LID still sleeps the laptop unless the lid action is set
+# to "Do nothing" in Windows power options - keep-awake cannot override that.
+Add-Type -Namespace VnvNative -Name Power -MemberDefinition @'
+[DllImport("kernel32.dll", SetLastError = true)]
+public static extern uint SetThreadExecutionState(uint esFlags);
+'@
+# (decimal literals: PS 5.1 parses 0x80000001 as a negative int32 and the uint32 cast throws)
+$script:ES_KEEP_AWAKE = [uint32]2147483649   # 0x80000001 = ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+$script:ES_RELEASE    = [uint32]2147483648   # 0x80000000 = ES_CONTINUOUS (clears the hold)
+
 # ---- CONFIG (same as launch.ps1) ----------------------------
 $script:RvcDir         = 'C:\Users\USER\Desktop\vnvpro\rvc-server'
 $script:WokadaDir      = 'C:\Users\USER\Downloads\vcclient_win_cuda_2.0.78-beta\dist\main'
@@ -26,9 +41,13 @@ $script:RvcPort        = 8765
 $script:LogDir         = 'C:\Users\USER\Desktop\vnvpro\logs'
 if (-not (Test-Path $script:LogDir)) { New-Item -ItemType Directory -Path $script:LogDir -Force | Out-Null }
 
-$script:tunnelUrl    = $null
-$script:awaitingUrl  = $false
-$script:urlWaitTicks = 0
+$script:tunnelUrl         = $null
+$script:awaitingUrl       = $false
+$script:urlWaitTicks      = 0
+$script:tunnelWanted      = $false                      # true = watchdog keeps the tunnel alive
+$script:lastTick          = Get-Date                    # for detecting a sleep/resume gap
+$script:lastTunnelRestart = (Get-Date).AddMinutes(-10)  # restart cooldown
+$script:watchCounter      = 0
 
 # Order matters for START ALL: heavy servers first, tunnel last.
 $script:servers = @(
@@ -55,6 +74,7 @@ function Start-VnvServer([string]$key) {
       'tunnel', '--url', "http://127.0.0.1:$($script:RvcPort)", '--protocol', 'http2', '--edge-ip-version', '4', '--logfile', $s.Log
     $script:awaitingUrl = $true
     $script:urlWaitTicks = 0
+    $script:tunnelWanted = $true
     return
   }
   if ($key -eq 'wokada') {
@@ -112,7 +132,18 @@ function Stop-VnvServer([string]$key) {
   if ($key -eq 'tunnel') {
     $script:tunnelUrl = $null
     $script:awaitingUrl = $false
+    $script:tunnelWanted = $false   # user chose to stop it - watchdog stands down
   }
+}
+
+# The tunnel is the fragile piece: sleep/network blips can invalidate a free
+# quick tunnel permanently. Restarting gets a fresh URL, which the existing
+# awaitingUrl flow then auto-pushes to the website - fully self-healing.
+function Restart-VnvTunnel {
+  $script:lastTunnelRestart = Get-Date
+  Stop-VnvServer 'tunnel'
+  Start-Sleep -Milliseconds 500
+  Start-VnvServer 'tunnel'
 }
 
 # 'on' = port listening / URL live; 'starting' = process alive, not ready; 'off' = nothing
@@ -330,7 +361,7 @@ $script:form.Controls.Add($stopAll)
 $y += 48
 
 $script:footer = New-Object System.Windows.Forms.Label
-$script:footer.Text = 'Closing this panel does NOT stop the servers.'
+$script:footer.Text = 'Keep-awake ON: laptop will not auto-sleep while this panel is open. Closing the panel does NOT stop the servers (but allows sleep again).'
 $script:footer.Font = New-Object System.Drawing.Font('Segoe UI', 8.5)
 $script:footer.ForeColor = [System.Drawing.Color]::DimGray
 $script:footer.Location = New-Object System.Drawing.Point(12, $y)
@@ -364,6 +395,35 @@ function Update-VnvUI {
 $script:timer = New-Object System.Windows.Forms.Timer
 $script:timer.Interval = 4000
 $script:timer.Add_Tick({
+  # ---- tunnel watchdog ----
+  $now = Get-Date
+  $gap = ($now - $script:lastTick).TotalSeconds
+  $script:lastTick = $now
+  if ($gap -gt 120 -and $script:tunnelWanted) {
+    # A gap this big between 4s ticks means the laptop slept. Free tunnels
+    # never survive sleep - restart proactively instead of waiting to fail.
+    $script:footer.Text = 'Woke from sleep - restarting the tunnel automatically...'
+    Restart-VnvTunnel
+  } else {
+    $script:watchCounter++
+    if ($script:watchCounter -ge 15) {   # deep check every ~60s
+      $script:watchCounter = 0
+      if ($script:tunnelWanted -and (($now - $script:lastTunnelRestart).TotalSeconds -gt 90)) {
+        $dead = $false
+        if (-not (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
+          $dead = $true    # process crashed/killed
+        } else {
+          $txt = Read-VnvLogText (Get-VnvServer 'tunnel').Log
+          if ($txt -and $txt.Contains('Unauthorized: Tunnel not found')) { $dead = $true }  # invalidated server-side, unrecoverable
+        }
+        if ($dead) {
+          $script:footer.Text = 'Tunnel died - restarting it automatically...'
+          Restart-VnvTunnel
+        }
+      }
+    }
+  }
+  # ---- tunnel URL pickup ----
   if ($script:awaitingUrl) {
     $u = Read-TunnelUrl
     if ($u) {
@@ -383,16 +443,22 @@ $script:timer.Add_Tick({
   Update-VnvUI
 })
 
-# On open: adopt whatever is already running (e.g. started by the old bat)
+# On open: hold the system awake, adopt whatever is already running
 $script:form.Add_Shown({
+  [void][VnvNative.Power]::SetThreadExecutionState($script:ES_KEEP_AWAKE)
   $u = Read-TunnelUrl
   if ($u -and (Get-Process cloudflared -ErrorAction SilentlyContinue)) {
     $script:tunnelUrl = $u
     $script:urlBox.Text = $u
+    $script:tunnelWanted = $true   # adopted tunnel is now under watchdog care
   }
+  $script:lastTick = Get-Date
   Update-VnvUI
   $script:timer.Start()
 })
-$script:form.Add_FormClosed({ $script:timer.Stop() })
+$script:form.Add_FormClosed({
+  $script:timer.Stop()
+  [void][VnvNative.Power]::SetThreadExecutionState($script:ES_RELEASE)   # allow sleep again
+})
 
 [System.Windows.Forms.Application]::Run($script:form)
