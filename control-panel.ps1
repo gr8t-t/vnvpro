@@ -9,7 +9,12 @@
 #   - View Log button per server (reads even while locked)
 #  Double-click VNV-CONTROL-PANEL.bat to open this panel.
 #  Closing the panel does NOT stop the servers.
+#
+#  -AutoStart: used by the Startup-folder entry so that after a
+#  boot/battery-death the panel opens at login and starts every
+#  server by itself - no manual START ALL needed.
 # ============================================================
+param([switch]$AutoStart)
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -451,6 +456,19 @@ $script:form.Add_Shown({
     $script:tunnelUrl = $u
     $script:urlBox.Text = $u
     $script:tunnelWanted = $true   # adopted tunnel is now under watchdog care
+  }
+  # -AutoStart (login entry): after a boot everything is dead - start it all.
+  # If some servers survived (hibernate) only revive what's missing.
+  if ($AutoStart) {
+    $allOff = $true
+    foreach ($srv in $script:servers) { if ((Get-VnvStatus $srv.Key) -ne 'off') { $allOff = $false } }
+    if ($allOff) {
+      $script:footer.Text = 'Auto-start: bringing all servers online...'
+      Start-AllVnv
+    } elseif ((Get-VnvStatus 'tunnel') -eq 'off') {
+      $script:footer.Text = 'Auto-start: servers alive, restarting the tunnel...'
+      Start-VnvServer 'tunnel'
+    }
   }
   $script:lastTick = Get-Date
   Update-VnvUI
