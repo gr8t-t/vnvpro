@@ -104,13 +104,23 @@ export default async function handler(req, res) {
     if (action === 'get_users') {
       const raw = await redis.get(USERS_KEY);
       const users = raw ? JSON.parse(raw) : [];
-      // Attach coin balances
+      // Live presence: green=streaming, yellow=app open, grey=offline (from heartbeat keys)
+      const pp = redis.pipeline();
+      users.forEach(u => { pp.exists('vnv_streaming:' + u.email); pp.exists('vnv_hb:' + u.email); });
+      let pres = [];
+      try { pres = await pp.exec(); } catch (_) {}
       const usersWithCoins = await Promise.all(
-        users.map(async u => ({
-          ...u,
-          password: undefined, // strip password from response
-          coins: await getBalance(u.email)
-        }))
+        users.map(async (u, i) => {
+          const streaming = pres[i * 2] && pres[i * 2][1];
+          const inApp = pres[i * 2 + 1] && pres[i * 2 + 1][1];
+          const presence = streaming ? 'streaming' : (inApp ? 'online' : 'offline');
+          return {
+            ...u,
+            password: undefined, // strip password from response
+            coins: await getBalance(u.email),
+            presence
+          };
+        })
       );
       return res.status(200).json({ users: usersWithCoins });
     }

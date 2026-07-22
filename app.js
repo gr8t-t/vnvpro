@@ -515,7 +515,8 @@ async function sendHeartbeat() {
     await fetch('/api/usercheck', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'heartbeat', email: currentEmail })
+      // report streaming so the admin presence light can show green while live
+      body: JSON.stringify({ action: 'heartbeat', email: currentEmail, streaming: !!isStreaming })
     });
   } catch (_) {}
 }

@@ -42,6 +42,66 @@ async function getPackages() {
   return raw ? JSON.parse(raw) : DEFAULT_PACKAGES;
 }
 
+// ── usage analytics ───────────────────────────────────────────────────────────
+// Every drain is logged into per-day hashes keyed by hour+feature, so we can chart
+// daily/weekly/monthly totals, time-of-day, and what consumed the coins. Buckets
+// are in WAT (UTC+1, Lagos — no DST) so "day"/"hour" match the operator's clock.
+const USAGE_TTL = 60 * 60 * 24 * 100;   // keep ~100 days of history, then auto-expire
+
+function watParts(ts) {
+  const d = new Date(ts + 60 * 60 * 1000);           // shift to WAT then read UTC fields
+  return { day: d.toISOString().slice(0, 10), hour: d.getUTCHours() };
+}
+
+async function logUsage(email, mode, coins, seconds) {
+  if (!(coins > 0)) return;                           // nothing actually spent
+  const { day, hour } = watParts(Date.now());
+  const field = `${hour}:${mode}`;
+  const uk = `vnv_usage:${email}:${day}`;
+  const ak = `vnv_usage:_all:${day}`;
+  const p = redis.pipeline();
+  p.hincrbyfloat(uk, field, coins);
+  p.hincrbyfloat(uk, field + ':s', seconds || 0);
+  p.expire(uk, USAGE_TTL);
+  p.hincrbyfloat(ak, field, coins);
+  p.hincrbyfloat(ak, field + ':s', seconds || 0);
+  p.expire(ak, USAGE_TTL);
+  try { await p.exec(); } catch (_) {}
+}
+
+// Read `days` worth of usage for a prefix (`vnv_usage:<email>` or `vnv_usage:_all`),
+// aggregated for charting: per-day-by-feature, per-hour (time of day), per-feature.
+async function readUsage(prefix, days) {
+  const nowWat = new Date(Date.now() + 60 * 60 * 1000);
+  const dayList = [];
+  const p = redis.pipeline();
+  for (let i = days - 1; i >= 0; i--) {
+    const ds = new Date(nowWat.getTime() - i * 86400000).toISOString().slice(0, 10);
+    dayList.push(ds);
+    p.hgetall(`${prefix}:${ds}`);
+  }
+  const rows = await p.exec();
+  const byDay = {};       // date -> { mode -> coins }
+  const byHour = {};      // "0".."23" -> coins
+  const byFeature = {};   // mode -> coins (window total)
+  dayList.forEach((ds, i) => {
+    const hash = (rows[i] && rows[i][1]) || {};
+    const feat = {};
+    for (const [f, v] of Object.entries(hash)) {
+      if (f.endsWith(':s')) continue;                 // seconds field — not coins
+      const sep = f.indexOf(':');
+      const hourStr = f.slice(0, sep);
+      const mode = f.slice(sep + 1);
+      const c = parseFloat(v) || 0;
+      feat[mode] = (feat[mode] || 0) + c;
+      byFeature[mode] = (byFeature[mode] || 0) + c;
+      byHour[hourStr] = (byHour[hourStr] || 0) + c;
+    }
+    byDay[ds] = feat;
+  });
+  return { dayList, byDay, byHour, byFeature };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -91,7 +151,30 @@ export default async function handler(req, res) {
 
       const newBal = Math.max(0, bal - cost);
       await setBalance(email, newBal);
+      await logUsage(email, mode, bal - newBal, seconds);   // record actual coins spent for analytics
       return res.status(200).json({ ok: true, balance: newBal, drained: cost });
+    }
+
+    // ── usage (analytics: user's own, or admin platform / per-user) ─────────────
+    if (action === 'usage') {
+      let prefix, balEmail = null;
+      if (isAdmin && body.scope) {
+        if (body.scope === 'all') {
+          prefix = 'vnv_usage:_all';                 // platform-wide totals
+        } else {
+          if (!body.targetEmail) return res.status(400).json({ error: 'Missing targetEmail' });
+          prefix = `vnv_usage:${body.targetEmail}`;
+          balEmail = body.targetEmail;
+        }
+      } else {
+        if (!email) return res.status(400).json({ error: 'Missing email' });
+        prefix = `vnv_usage:${email}`;               // the logged-in user's own usage
+        balEmail = email;
+      }
+      const days = Math.min(120, Math.max(1, parseInt(body.days) || 92));
+      const data = await readUsage(prefix, days);
+      const balance = balEmail ? await getBalance(balEmail) : null;
+      return res.status(200).json({ ...data, balance });
     }
 
     // ── topup (submit payment) ─────────────────────────────────────────────────

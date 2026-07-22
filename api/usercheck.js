@@ -17,9 +17,14 @@ export default async function handler(req, res) {
 
   try {
     // ── heartbeat ──────────────────────────────────────────────────────────────
+    // vnv_hb:<email>       present  => "in the app" (yellow)
+    // vnv_streaming:<email> present => "streaming"  (green); absent+hb => yellow; neither => grey
     if (action === 'heartbeat') {
       if (!email) return res.status(400).json({ error: 'Missing email' });
       await redis.set(HEARTBEAT_PREFIX + email, Date.now(), 'EX', 120);
+      if (req.body && req.body.streaming) {
+        await redis.set('vnv_streaming:' + email, Date.now(), 'EX', 45);   // >30s heartbeat so it won't flicker
+      }
       return res.status(200).json({ ok: true });
     }
 
