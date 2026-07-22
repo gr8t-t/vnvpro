@@ -52,6 +52,37 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, email: user.email });
     }
 
+    // ── reset_password (self-service recovery via access code) ───────────────────
+    // The access code the user got at signup is their recovery key: prove ownership
+    // of the email with the code, then set a new password. No email/SMS needed.
+    if (action === 'reset_password') {
+      const { accessCode, newPassword } = req.body || {};
+      if (!email || !accessCode || !newPassword) {
+        return res.status(400).json({ error: 'Email, access code, and new password are all required.' });
+      }
+      if (String(newPassword).length < 4) {
+        return res.status(400).json({ error: 'New password must be at least 4 characters.' });
+      }
+
+      const raw = await redis.get(USERS_KEY);
+      const users = raw ? JSON.parse(raw) : [];
+      const idx = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
+      if (idx === -1) return res.status(404).json({ error: 'No account found with that email.' });
+
+      // Normalize the code (stored codes are uppercase like VNV-AB12-CD34) so typos
+      // in case/whitespace don't block a legitimate reset.
+      const stored = String(users[idx].accessCode || '').trim().toUpperCase();
+      const given = String(accessCode).trim().toUpperCase();
+      if (!stored || stored !== given) {
+        return res.status(401).json({ error: 'That access code does not match this account.' });
+      }
+
+      users[idx].password = String(newPassword);
+      users[idx].passwordResetAt = Date.now();
+      await redis.set(USERS_KEY, JSON.stringify(users));
+      return res.status(200).json({ ok: true });
+    }
+
     return res.status(400).json({ error: 'Unknown action' });
 
   } catch (err) {

@@ -253,6 +253,23 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── view_access_code (logged-in user re-views their recovery code) ───────────
+    // Safety net: lets a user retrieve their access code any time by re-confirming
+    // their password, so they can save their recovery key before they ever get
+    // locked out. Requires the user's own password (sent as userPassword, NOT the
+    // admin `password` field), so only the account owner can see it.
+    if (action === 'view_access_code') {
+      const { email, userPassword } = body;
+      if (!email || !userPassword) return res.status(400).json({ error: 'Email and password required' });
+      const usersRaw = await redis.get(USERS_KEY);
+      const users = usersRaw ? JSON.parse(usersRaw) : [];
+      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (!user || user.password !== userPassword) {
+        return res.status(401).json({ error: 'Incorrect email or password.' });
+      }
+      return res.status(200).json({ code: user.accessCode || null });
+    }
+
     return res.status(400).json({ error: 'Unknown action' });
 
   } catch (err) {

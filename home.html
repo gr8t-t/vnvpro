@@ -27,6 +27,12 @@
     }
     .badge-new  { background: var(--accent); color: #fff; }
     .badge-soon { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+
+    .code-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .code-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 400px; box-shadow: var(--shadow); }
+    .code-modal h3 { font-size: 19px; font-weight: 700; }
+    .code-value { font-family: monospace; font-size: 22px; font-weight: 700; letter-spacing: 1px; text-align: center; background: var(--bg3); border: 1px dashed var(--border); border-radius: 10px; padding: 16px; color: var(--accent2); word-break: break-all; }
+    .code-err { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--red); margin-bottom: 14px; }
   </style>
 </head>
 <body>
@@ -41,6 +47,7 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="btn btn-ghost btn-sm" id="codeBtn" onclick="openCodeModal()">🔑 Access Code</button>
       <button class="btn btn-ghost btn-sm" id="logoutBtn" onclick="logout()">Logout</button>
     </div>
   </header>
@@ -93,6 +100,29 @@
     </div>
   </main>
 
+  <!-- Access-code retrieval (recovery key) -->
+  <div id="codeModal" class="code-modal-overlay" style="display:none;">
+    <div class="code-modal">
+      <h3>Your access code</h3>
+      <p style="color:var(--text2); font-size:13px; margin:6px 0 16px; line-height:1.55;">
+        This is your <b>recovery key</b> — save it somewhere safe. You'll need it to reset your password if you ever forget it. Confirm your password to view it.
+      </p>
+      <div id="codeError" class="code-err" style="display:none;"></div>
+      <div id="codeStage1">
+        <div class="form-group">
+          <label class="form-label" for="codePw">Your password</label>
+          <input type="password" id="codePw" class="form-input" placeholder="Your current password" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary w-full" id="codeShowBtn" onclick="revealCode()">Show my code</button>
+      </div>
+      <div id="codeStage2" style="display:none;">
+        <div class="code-value" id="codeValue">—</div>
+        <button class="btn btn-primary w-full" id="codeCopyBtn" onclick="copyCode()" style="margin-top:12px;">Copy code</button>
+      </div>
+      <button class="btn btn-ghost w-full" onclick="closeCodeModal()" style="margin-top:10px;">Close</button>
+    </div>
+  </div>
+
   <div id="toast"></div>
 
   <script>
@@ -117,6 +147,54 @@
     function logout() {
       localStorage.removeItem('vnv_session');
       window.location.href = 'login.html';
+    }
+
+    // ── access code (recovery key) retrieval ──
+    function openCodeModal() {
+      document.getElementById('codeError').style.display = 'none';
+      document.getElementById('codeStage1').style.display = 'block';
+      document.getElementById('codeStage2').style.display = 'none';
+      document.getElementById('codePw').value = '';
+      document.getElementById('codeModal').style.display = 'flex';
+    }
+    function closeCodeModal() {
+      document.getElementById('codeModal').style.display = 'none';
+    }
+    async function revealCode() {
+      const pw = document.getElementById('codePw').value;
+      const err = document.getElementById('codeError');
+      err.style.display = 'none';
+      if (!pw) { err.textContent = 'Enter your password.'; err.style.display = 'block'; return; }
+      const btn = document.getElementById('codeShowBtn');
+      btn.disabled = true; btn.textContent = 'Checking...';
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'view_access_code', email: currentEmail, userPassword: pw })
+        });
+        const data = await res.json();
+        if (res.ok && data.code) {
+          document.getElementById('codeValue').textContent = data.code;
+          document.getElementById('codeStage1').style.display = 'none';
+          document.getElementById('codeStage2').style.display = 'block';
+        } else if (res.ok && !data.code) {
+          err.textContent = 'No access code on file for this account. Contact support.'; err.style.display = 'block';
+        } else {
+          err.textContent = data.error || 'Incorrect password.'; err.style.display = 'block';
+        }
+      } catch (e) {
+        err.textContent = 'Network error. Please try again.'; err.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Show my code';
+      }
+    }
+    function copyCode() {
+      const code = document.getElementById('codeValue').textContent;
+      const btn = document.getElementById('codeCopyBtn');
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy code'; }, 1500);
+      }).catch(() => {});
     }
   </script>
 </body>
