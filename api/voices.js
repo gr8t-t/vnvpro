@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     // ── add_voice (admin) ──────────────────────────────────────────────────────
     if (action === 'add_voice') {
       if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
-      const { name, folderName, description, previewUrl, previewBase64, isPublic, isPremium, price, wokadaSlot } = body;
+      const { name, folderName, description, previewUrl, previewBase64, isPublic, isPremium, price, wokadaSlot, defaultPitch } = body;
       if (!name || !folderName) return res.status(400).json({ error: 'Name and folderName required' });
 
       const voices = await getVoices();
@@ -106,6 +106,8 @@ export default async function handler(req, res) {
         price: parseFloat(price) || 0,
         // w-okada (Voice 2.0) slot index for this voice; null = not available on Voice 2.0
         wokadaSlot: (wokadaSlot === undefined || wokadaSlot === null || wokadaSlot === '') ? null : parseInt(wokadaSlot, 10),
+        // Voice 2.0 pitch offset auto-applied when this voice is selected (semitones); 0 = none
+        defaultPitch: (defaultPitch === undefined || defaultPitch === null || defaultPitch === '') ? 0 : parseInt(defaultPitch, 10),
         createdAt: Date.now()
       };
 
@@ -124,12 +126,16 @@ export default async function handler(req, res) {
       const idx = voices.findIndex(v => v.id === id);
       if (idx === -1) return res.status(404).json({ error: 'Voice not found' });
 
-      const allowed = ['name', 'description', 'folderName', 'previewUrl', 'previewBase64', 'isPublic', 'isPremium', 'price', 'wokadaSlot'];
+      const allowed = ['name', 'description', 'folderName', 'previewUrl', 'previewBase64', 'isPublic', 'isPremium', 'price', 'wokadaSlot', 'defaultPitch'];
       for (const key of allowed) {
         if (body[key] !== undefined) {
-          voices[idx][key] = (key === 'wokadaSlot')
-            ? ((body[key] === null || body[key] === '') ? null : parseInt(body[key], 10))
-            : body[key];
+          if (key === 'wokadaSlot') {
+            voices[idx][key] = (body[key] === null || body[key] === '') ? null : parseInt(body[key], 10);
+          } else if (key === 'defaultPitch') {
+            voices[idx][key] = (body[key] === null || body[key] === '') ? 0 : parseInt(body[key], 10);
+          } else {
+            voices[idx][key] = body[key];
+          }
         }
       }
       voices[idx].updatedAt = Date.now();

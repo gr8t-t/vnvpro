@@ -638,6 +638,10 @@ function selectVoice(id) {
     return;
   }
   selectedVoice = v;
+  // Auto-apply this voice's Voice 2.0 pitch offset (e.g. Gleen Cook = -2) so it sounds
+  // right without the user touching the slider. Each voice carries its own default;
+  // voices without one reset to 0. The user can still override with the slider after.
+  setPitchUI(typeof v.defaultPitch === 'number' ? v.defaultPitch : 0);
   renderVoices(); // re-render to update selection
   showToast(`Voice selected: ${v.name}`, 'success');
 }
