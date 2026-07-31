@@ -40,6 +40,13 @@ import uvicorn
 
 from rvc_python.infer import RVCInference
 
+try:
+    import voice_score
+    _SCORE_OK = True
+except Exception as _e:
+    print("voice_score unavailable:", _e)
+    _SCORE_OK = False
+
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR  = os.path.join(BASE_DIR, "models")
 DEVICE      = "cuda:0"          # set to "cpu" if no NVIDIA GPU
@@ -612,6 +619,34 @@ async def v2_convert(request: Request, ts: int = 0):
     out16 = soxr.resample(out48, 48000, 16000)
     out16i = np.clip(out16 * 32768.0, -32768, 32767).astype("<i2")
     return Response(content=out16i.tobytes(), media_type="application/octet-stream")
+
+
+# ── Voice Match score (Setup Mode) ────────────────────────────────────────────
+# Measures how close a converted output sounds to the real target voice (0-100%).
+@app.get("/score/health")
+def score_health():
+    return {"ok": _SCORE_OK, "voices": (list(voice_score._load_refs().keys()) if _SCORE_OK else [])}
+
+@app.post("/score/reload")
+def score_reload():
+    if not _SCORE_OK:
+        return {"ok": False}
+    return {"ok": True, "voices": list(voice_score.reload_refs().keys())}
+
+@app.post("/score")
+async def score(request: Request, folder: str):
+    """Body = 16 kHz mono int16 PCM of the converted output.
+    Returns {ok, percent, cosine} - how close it is to `folder`'s real voice."""
+    if not _SCORE_OK:
+        return JSONResponse(status_code=503, content={"ok": False, "error": "scoring unavailable"})
+    raw = await request.body()
+    if not raw:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "no audio"})
+    try:
+        res = await asyncio.get_event_loop().run_in_executor(None, voice_score.score_pcm16, raw, folder)
+        return JSONResponse(res)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)[:200]})
 
 
 if __name__ == "__main__":

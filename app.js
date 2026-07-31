@@ -39,6 +39,8 @@ let setupCanvasStream = null;    // image-as-video stream fed into the SAME outp
 let setupDrawInterval = null;
 let settingsApplied = false;
 let isStreaming = false;
+let vmBuf = new Float32Array(0);  // rolling converted-output audio for the Voice Match meter
+let vmTimer = null;               // live Voice Match meter interval
 let audioBillingInterval = null;
 let audioBillingSeconds = 0;
 let voices = [];
@@ -642,6 +644,7 @@ function selectVoice(id) {
   // right without the user touching the slider. Each voice carries its own default;
   // voices without one reset to 0. The user can still override with the slider after.
   setPitchUI(typeof v.defaultPitch === 'number' ? v.defaultPitch : 0);
+  updateVoiceMatchVisibility();
   renderVoices(); // re-render to update selection
   showToast(`Voice selected: ${v.name}`, 'success');
 }
@@ -792,6 +795,8 @@ async function startStream() {
     }
 
     isStreaming = true;
+    vmBuf = new Float32Array(0);
+    updateVoiceMatchVisibility();
     document.getElementById('startBtn').disabled = true;
     document.getElementById('stopBtn').disabled = false;
     document.getElementById('modeSelector').style.opacity = '0.5';
@@ -816,6 +821,7 @@ async function startStream() {
 
 function stopStream() {
   isStreaming = false;
+  updateVoiceMatchVisibility();
 
   // Stop video delay buffering
   stopVideoDelay();
@@ -1118,6 +1124,7 @@ function toggleSetupMode() {
   if (!setupAllowed) { showToast("Setup Mode isn't available for your account.", 'info'); return; }
   setupActive = !setupActive;
   updateSetupUI();
+  updateVoiceMatchVisibility();
   showToast(setupActive
     ? 'Setup Mode ON — free preview, no coins charged.'
     : 'Setup Mode off — normal (paid) streaming.', setupActive ? 'success' : 'info');
@@ -1333,6 +1340,7 @@ async function startV2Pipeline(voice) {
 
   function schedule(f32) {
     if (!playbackCtx) return;
+    feedVoiceMatch(f32);   // tap converted output for the Voice Match meter
     let s = 0; for (let i = 0; i < f32.length; i++) s += f32[i] * f32[i];
     outputLevel = Math.min(100, Math.sqrt(s / f32.length) * 300);
     const now = playbackCtx.currentTime;
@@ -1617,6 +1625,7 @@ function updatePitchControlVisibility() {
   if (panel)  panel.style.display  = (isV2 && mode === 'both')  ? '' : 'none';
   if (center) center.style.display = (isV2 && mode === 'audio') ? '' : 'none';
   setPitchUI(v2Pitch);   // keep both sliders + labels in sync
+  updateVoiceMatchVisibility();
 }
 
 function setPitchUI(val) {
@@ -1646,6 +1655,82 @@ async function applyV2Pitch() {
       method: 'POST', headers: { 'ngrok-skip-browser-warning': 'true' }
     });
   } catch (_) {}
+}
+
+// ── Voice Match meter (Setup Mode) ────────────────────────────────────────────
+// Scores how close the converted output sounds to the real target voice (0-100%).
+const VM_RATE = 16000;
+function feedVoiceMatch(f32) {
+  const max = VM_RATE * 8;                    // keep the last ~8s of converted audio
+  if (f32.length >= max) { vmBuf = f32.slice(f32.length - max); return; }
+  const total = Math.min(max, vmBuf.length + f32.length);
+  const merged = new Float32Array(total);
+  const keepOld = total - f32.length;
+  merged.set(vmBuf.slice(vmBuf.length - keepOld));
+  merged.set(f32, keepOld);
+  vmBuf = merged;
+}
+function vmToInt16(seconds) {
+  const n = Math.min(vmBuf.length, Math.floor(VM_RATE * seconds));
+  if (n < VM_RATE) return null;               // need >=1s
+  const slice = vmBuf.slice(vmBuf.length - n);
+  const i16 = new Int16Array(slice.length);
+  for (let i = 0; i < slice.length; i++) i16[i] = Math.max(-32768, Math.min(32767, slice[i] * 32768));
+  return i16;
+}
+async function vmScore(seconds) {
+  if (!selectedVoice || !selectedVoice.folderName || !rvcServerUrl) return null;
+  const i16 = vmToInt16(seconds);
+  if (!i16) return null;
+  try {
+    const res = await fetch(`${rvcServerUrl.replace(/\/$/, '')}/score?folder=${encodeURIComponent(selectedVoice.folderName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
+      body: i16.buffer
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (_) { return null; }
+}
+function vmColor(p) { return p >= 70 ? '#22c55e' : p >= 40 ? '#f59e0b' : '#ef4444'; }
+function vmSetLive(p) {
+  const bar = document.getElementById('vmLiveBar'), pct = document.getElementById('vmLivePct');
+  if (bar) { bar.style.width = p + '%'; bar.style.background = vmColor(p); }
+  if (pct) { pct.textContent = p + '%'; pct.style.color = vmColor(p); }
+}
+async function vmLiveTick() {
+  if (!isStreaming || engine !== 'v2') return;
+  const r = await vmScore(2.5);
+  if (r && r.ok) vmSetLive(r.percent);
+}
+async function voiceMatchTest() {
+  const btn = document.getElementById('vmTestBtn');
+  if (!isStreaming) { showToast('Press Start and talk first, then Test.', 'info'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Listening… keep talking'; }
+  await new Promise(res => setTimeout(res, 5000));   // gather 5s of fresh converted audio
+  const r = await vmScore(5);
+  const box = document.getElementById('vmResult');
+  const rp = document.getElementById('vmResultPct'), rl = document.getElementById('vmResultLabel');
+  if (box) box.style.display = 'block';
+  if (r && r.ok) {
+    if (rp) { rp.textContent = r.percent + '%'; rp.style.color = vmColor(r.percent); }
+    const name = selectedVoice ? selectedVoice.name : 'the voice';
+    if (rl) rl.textContent = r.percent >= 70 ? `close to ${name}` : r.percent >= 40 ? 'getting there — adjust the pitch' : 'not close yet';
+  } else {
+    if (rp) { rp.textContent = '—'; rp.style.color = 'var(--text2)'; }
+    if (rl) rl.textContent = (r && r.error) ? r.error : 'keep talking during the test, then try again';
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🎤 Test match (5s)'; }
+}
+function updateVoiceMatchVisibility() {
+  const panel = document.getElementById('voiceMatchPanel');
+  if (!panel) return;
+  const show = setupActive && engine === 'v2' && selectedVoice && selectedVoice.wokadaSlot != null;
+  panel.style.display = show ? '' : 'none';
+  const nm = document.getElementById('vmVoiceName');
+  if (nm && selectedVoice) nm.textContent = selectedVoice.name;
+  if (show && isStreaming && !vmTimer) { vmTimer = setInterval(vmLiveTick, 1500); }
+  if ((!show || !isStreaming) && vmTimer) { clearInterval(vmTimer); vmTimer = null; }
 }
 
 function openV2Guide() {

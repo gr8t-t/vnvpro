@@ -666,6 +666,21 @@
             <input type="range" id="pitchSlider" min="-12" max="12" value="0" step="1" style="width:100%;">
             <div style="font-size:10px; color:var(--text2); margin-top:4px; line-height:1.5;">🎚 <strong style="color:var(--text);">Set this to match your voice.</strong> While talking, slide until it sounds right — deeper voice: slide up, higher: slide down.</div>
           </div>
+          <div id="voiceMatchPanel" style="display:none; padding:10px 12px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+              <span style="font-size:11px; color:var(--text2);">🎯 Voice Match</span>
+              <span id="vmLivePct" style="font-size:12px; font-weight:600; color:var(--text2);">—</span>
+            </div>
+            <div style="height:8px; background:rgba(255,255,255,0.08); border-radius:999px; overflow:hidden; margin-bottom:8px;">
+              <div id="vmLiveBar" style="height:100%; width:0%; background:#888; border-radius:999px; transition:width .4s, background .4s;"></div>
+            </div>
+            <button id="vmTestBtn" class="btn btn-secondary btn-sm w-full" onclick="voiceMatchTest()">🎤 Test match (5s)</button>
+            <div id="vmResult" style="text-align:center; margin-top:8px; display:none;">
+              <div id="vmResultPct" style="font-size:22px; font-weight:700; line-height:1.1;">—</div>
+              <div id="vmResultLabel" style="font-size:11px; color:var(--text2);"></div>
+            </div>
+            <div style="font-size:10px; color:var(--text2); margin-top:6px; line-height:1.45;">How close your converted voice sounds to the real <strong id="vmVoiceName" style="color:var(--text);">voice</strong> (100% = identical). Talk, then Test.</div>
+          </div>
           <div class="panel-header">Select Voice</div>
           <div class="voices-list" id="voicesList">
             <div class="voice-empty">
