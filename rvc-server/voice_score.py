@@ -24,11 +24,15 @@ REFS_FILE    = os.path.join(BASE_DIR, "voice_refs.json")
 DEVICE       = "cuda:0" if torch.cuda.is_available() else "cpu"
 FLOOR        = 0.30   # cosine at/below this reads as 0% (a different person)
 
-# Trained voices: the reference is the real audio the user uploaded to train.
+# Explicit reference audio: the real voice a converted output is measured against.
+# Trained voices -> the training audio the user uploaded; imported voices with a
+# user-supplied reference clip (e.g. elonmuskyy -> a real Elon clip) -> that clip.
+# Any folder not listed here falls back to its previewBase64 from Redis.
 TRAINED_AUDIO = {
-    "gleencook": [r"C:\Users\USER\Desktop\Applio\datasets\gleencook\gleencook.wav",
-                  r"C:\Users\USER\Desktop\Applio\_gleen_new.wav"],
-    "george":    [r"C:\Users\USER\Desktop\Applio\datasets\george\george_combined.wav"],
+    "gleencook":  [r"C:\Users\USER\Desktop\Applio\datasets\gleencook\gleencook.wav",
+                   r"C:\Users\USER\Desktop\Applio\_gleen_new.wav"],
+    "george":     [r"C:\Users\USER\Desktop\Applio\datasets\george\george_combined.wav"],
+    "elonmuskyy": [r"C:\Users\USER\Desktop\vnvpro\voice models\rawvoice\Elonmuskyyy.mp4"],
 }
 
 _cp = None
