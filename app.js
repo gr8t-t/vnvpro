@@ -640,10 +640,9 @@ function selectVoice(id) {
     return;
   }
   selectedVoice = v;
-  // Auto-apply this voice's Voice 2.0 pitch offset (e.g. Gleen Cook = -2) so it sounds
-  // right without the user touching the slider. Each voice carries its own default;
-  // voices without one reset to 0. The user can still override with the slider after.
-  setPitchUI(typeof v.defaultPitch === 'number' ? v.defaultPitch : 0);
+  // Pitch stays at 0 by default for everyone. The right shift depends on each
+  // user's OWN voice (deep vs high), so no voice inherits a preset that was fitted
+  // to one person. Users set it themselves — the Voice Match meter guides them.
   updateVoiceMatchVisibility();
   renderVoices(); // re-render to update selection
   showToast(`Voice selected: ${v.name}`, 'success');
