@@ -821,6 +821,7 @@ async function startStream() {
 function stopStream() {
   isStreaming = false;
   updateVoiceMatchVisibility();
+  stopSetupWatermark();
 
   // Stop video delay buffering
   stopVideoDelay();
@@ -1321,17 +1322,7 @@ async function startV2Pipeline(voice) {
   playbackCtx = new AudioContext({ sampleRate: V2_RATE });
   nextPlayTime = 0;
   micStream = await getSafeMicStream({ echoCancellation: true, autoGainControl: false, noiseSuppression: true });
-  if (setupActive) {
-    try {
-      await enforceSetupEarpiece(playbackCtx);
-      showToast('Setup audio → ' + setupOutputLabel + ' · cable output blocked', 'success');
-    } catch (e) {
-      try { micStream.getTracks().forEach(t => t.stop()); } catch (_) {}
-      try { audioCtx.close(); } catch (_) {}
-      try { playbackCtx.close(); } catch (_) {}
-      throw e;
-    }
-  }
+  if (setupActive) startSetupWatermark();
   const source = audioCtx.createMediaStreamSource(micStream);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 256;
@@ -1437,42 +1428,38 @@ async function startV2Pipeline(voice) {
   }, 50);
 }
 
-// ── Setup Mode anti-abuse: earpiece-only output ──────────────────────────────
-// The free voice conversion in Setup Mode must play ONLY to a real earpiece/
-// speaker, never a virtual audio cable (which cheaters route into a live call to
-// get the voice for free). We lock the playback sink to a real device and block
-// Setup Mode if there isn't one. Heuristic by device name — a determined user
-// could rename a cable or use OS loopback; this stops the common cheat.
-const CABLE_RE = /cable|vb-audio|voicemeeter|\bvac\b|virtual audio|virtual cable|\bline \d\b|stereo mix|what u hear|black ?hole|loopback|\bobs\b|nvidia broadcast|steam streaming/i;
-function isCableLabel(label) { return CABLE_RE.test(label || ''); }
-let setupOutputLabel = '';
-async function enforceSetupEarpiece(ctx) {
-  if (!ctx || typeof ctx.setSinkId !== 'function') {
-    throw new Error('Setup Mode needs an up-to-date Chrome to secure the audio — please update your browser.');
-  }
-  let outs = [];
-  try { outs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audiooutput'); } catch (_) {}
-  const real = outs.filter(d => d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications' && !isCableLabel(d.label));
-  const def = outs.find(d => d.deviceId === 'default');
-  const defaultIsCable = def && isCableLabel(def.label);
-  if (real.length === 0) {
-    throw new Error('Setup Mode only works with headphones or a speaker — a virtual audio cable (CABLE Input) is not allowed.');
-  }
-  // Lock to a SPECIFIC real device (never '' default) so switching the system
-  // default to a cable mid-session can't route the free voice into a call.
-  const chosen = (def && !defaultIsCable && real.find(d => d.groupId && d.groupId === def.groupId)) || real[0];
-  await ctx.setSinkId(chosen.deviceId);
-  setupOutputLabel = chosen.label || 'your earpiece';
-  return chosen;
+// ── Setup Mode watermark ─────────────────────────────────────────────────────
+// A spoken "setup mode" every 10s, mixed into the SAME output the converted
+// voice uses — so it follows the audio wherever the user routes it (earpiece OR
+// a virtual cable). You can still hear yourself to set up + tune pitch, but the
+// mark makes the audio useless for a real call. Routing-proof: unlike trying to
+// control the output device, the mark is baked into the sound. Kept out of the
+// Voice Match score (it's a separate node, never fed to feedVoiceMatch).
+let wmArrayBuffer = null;   // fetched clip bytes (cached across sessions)
+let wmBuffer = null;        // decoded for the current playbackCtx
+let wmTimer = null;
+async function loadWatermark() {
+  try {
+    if (!wmArrayBuffer) wmArrayBuffer = await (await fetch('/setup-mode.mp3', { cache: 'force-cache' })).arrayBuffer();
+    if (playbackCtx && wmArrayBuffer) wmBuffer = await playbackCtx.decodeAudioData(wmArrayBuffer.slice(0));
+  } catch (_) { wmBuffer = null; }
 }
-if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
-  navigator.mediaDevices.addEventListener('devicechange', async () => {
-    if (isStreaming && setupActive && playbackCtx) {
-      try { await enforceSetupEarpiece(playbackCtx); }
-      catch (e) { showToast(e.message, 'error'); stopStream(); }
-    }
-  });
+function playWatermarkOnce() {
+  if (!playbackCtx || !wmBuffer) return;
+  try {
+    const src = playbackCtx.createBufferSource(); src.buffer = wmBuffer;
+    const g = playbackCtx.createGain(); g.gain.value = 0.9;
+    src.connect(g); g.connect(playbackCtx.destination); src.start();
+  } catch (_) {}
 }
+async function startSetupWatermark() {
+  await loadWatermark();
+  if (!wmBuffer) return;
+  if (wmTimer) clearInterval(wmTimer);
+  playWatermarkOnce();                             // mark immediately on start
+  wmTimer = setInterval(playWatermarkOnce, 10000);
+}
+function stopSetupWatermark() { if (wmTimer) { clearInterval(wmTimer); wmTimer = null; } }
 
 async function startAudioPipeline(voice) {
   // Voice 2.0 — stream to w-okada via the RVC server's /v2 proxy
@@ -1503,18 +1490,7 @@ async function startAudioPipeline(voice) {
   // loops/stacks — the "repeating continuously" bug. AEC cancels that playback
   // out of the mic signal (same as video calls) while keeping your dry voice.
   micStream = await getSafeMicStream({ echoCancellation: true, autoGainControl: false, noiseSuppression: true });
-  if (setupActive) {
-    try {
-      await enforceSetupEarpiece(playbackCtx);
-      showToast('Setup audio → ' + setupOutputLabel + ' · cable output blocked', 'success');
-    } catch (e) {
-      try { micStream.getTracks().forEach(t => t.stop()); } catch (_) {}
-      try { audioCtx.close(); } catch (_) {}
-      try { playbackCtx.close(); } catch (_) {}
-      try { rvcWs && rvcWs.close(); } catch (_) {}
-      throw e;
-    }
-  }
+  if (setupActive) startSetupWatermark();
 
   const source = audioCtx.createMediaStreamSource(micStream);
   const gate = makeNoiseGate(16000);
