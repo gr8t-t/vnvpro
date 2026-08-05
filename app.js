@@ -540,6 +540,10 @@ async function loadBalance() {
     const data = await res.json();
     updateCoinDisplay(data.balance ?? 0);
     setupAllowed = data.setupMode !== false;
+    if (data.forceStop && isStreaming) {
+      stopStream();
+      showToast('Your stream was ended by the admin.', 'error');
+    }
     applySetupAvailability();
   } catch (_) {}
 }

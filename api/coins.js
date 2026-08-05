@@ -131,7 +131,9 @@ export default async function handler(req, res) {
         const u = users.find(x => x.email === email);
         if (u && u.setupMode === false) setupMode = false;
       } catch (_) {}
-      return res.status(200).json({ balance: bal, setupMode });
+      let forceStop = false;
+      try { forceStop = !!(await redis.get('vnv_force_stop:' + email)); } catch (_) {}
+      return res.status(200).json({ balance: bal, setupMode, forceStop });
     }
 
     // ── drain ──────────────────────────────────────────────────────────────────

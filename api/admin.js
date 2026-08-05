@@ -101,6 +101,17 @@ export default async function handler(req, res) {
     if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
 
     // ── get_users ──────────────────────────────────────────────────────────────
+    // ── force_stop (admin) — end a user's live stream now ──────────────────────
+    if (action === 'force_stop') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const { targetEmail } = body;
+      if (!targetEmail) return res.status(400).json({ error: 'Missing targetEmail' });
+      // Flag the user; their app obeys it on the next balance poll and stops the stream.
+      await redis.set('vnv_force_stop:' + targetEmail, '1', 'EX', 120);
+      await redis.del('vnv_streaming:' + targetEmail);   // clear live-presence immediately
+      return res.status(200).json({ ok: true });
+    }
+
     if (action === 'get_users') {
       const raw = await redis.get(USERS_KEY);
       const users = raw ? JSON.parse(raw) : [];

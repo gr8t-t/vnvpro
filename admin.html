@@ -678,15 +678,27 @@
       const pw = document.getElementById('adminPwInput').value;
       if (!pw) return;
       adminPw = pw;
+      localStorage.setItem('vnv_adm', pw);
       loadAll();
       document.getElementById('authOverlay').style.display = 'none';
     }
 
     function adminLogout() {
       adminPw = '';
+      localStorage.removeItem('vnv_adm');
       document.getElementById('authOverlay').style.display = 'flex';
       document.getElementById('adminPwInput').value = '';
     }
+
+    // Stay logged in across refreshes until Logout is clicked.
+    window.addEventListener('load', () => {
+      const saved = localStorage.getItem('vnv_adm');
+      if (saved) {
+        adminPw = saved;
+        document.getElementById('authOverlay').style.display = 'none';
+        loadAll();
+      }
+    });
 
     // ─── PAGES ───────────────────────────────────────────────────────────────────
     function showPage(name, btn) {
@@ -881,11 +893,19 @@
           <td><span class="badge ${u.active ? 'badge-green' : 'badge-gray'}">${u.active ? 'Active' : 'Inactive'}</span></td>
           <td>
             <button class="btn btn-sm" onclick="toggleUserSetup('${escHtml(u.email)}', ${!setupOn})" title="Setup Mode = free test mode (image output, no Decart, no coins). Turn OFF once this user's setup is confirmed working." style="${setupOn ? 'background:#f59e0b;color:#1a1a1a;border-color:#f59e0b;' : ''}">🛠 Setup: ${setupOn ? 'ON' : 'OFF'}</button>
+            ${u.presence === 'streaming' ? `<button class="btn btn-sm" onclick="forceStopUser('${escHtml(u.email)}')" style="background:#ef4444;color:#fff;border-color:#ef4444;" title="End this user's live stream now">⏹ Stop</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="openGrantCoins('${escHtml(u.email)}')">Coins</button>
             <button class="btn btn-danger btn-sm" onclick="deleteUser('${escHtml(u.email)}')">Delete</button>
           </td>
         </tr>`;
       }).join('');
+    }
+
+    async function forceStopUser(email) {
+      if (!confirm("End this user's live stream now?")) return;
+      const d = await api({ action: 'force_stop', targetEmail: email });
+      if (d && d.ok) { showToast('Stop sent — their stream ends within ~30s.', 'success'); setTimeout(loadUsers, 1200); }
+      else { showToast('Failed: ' + ((d && d.error) || 'unknown'), 'error'); }
     }
 
     function presenceDot(p) {
