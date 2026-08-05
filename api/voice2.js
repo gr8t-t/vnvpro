@@ -106,6 +106,10 @@ export default async function handler(req, res) {
     }
 
     if (action === 'v2_acquire') {
+      // Don't let a force-stopped user immediately re-grab the slot.
+      if (email && await redis.get('vnv_force_stop:' + email)) {
+        return res.status(200).json({ ok: false, forceStopped: true });
+      }
       const holder = await getHolder();
       if (holder) {
         if (holder.email === email) {
@@ -132,6 +136,14 @@ export default async function handler(req, res) {
     }
 
     if (action === 'v2_heartbeat') {
+      // Admin force-stop: drop the slot so the client's own 'lost' handler ends
+      // the stream within ~10s — works even on already-loaded (old) pages.
+      if (email && await redis.get('vnv_force_stop:' + email)) {
+        const h = await getHolder();
+        if (h && h.email === email) await redis.del(HOLDER_KEY);
+        await redis.del('vnv_streaming:' + email);
+        return res.status(200).json({ ok: false, lost: true });
+      }
       const holder = await getHolder();
       if (holder && holder.email === email) {
         await redis.set(HOLDER_KEY, JSON.stringify({ email }), 'EX', HOLDER_TTL_SEC);

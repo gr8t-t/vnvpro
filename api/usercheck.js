@@ -22,10 +22,13 @@ export default async function handler(req, res) {
     if (action === 'heartbeat') {
       if (!email) return res.status(400).json({ error: 'Missing email' });
       await redis.set(HEARTBEAT_PREFIX + email, Date.now(), 'EX', 120);
-      if (req.body && req.body.streaming) {
+      let forceStop = false;
+      try { forceStop = !!(await redis.get('vnv_force_stop:' + email)); } catch (_) {}
+      if (req.body && req.body.streaming && !forceStop) {
         await redis.set('vnv_streaming:' + email, Date.now(), 'EX', 45);   // >30s heartbeat so it won't flicker
       }
-      return res.status(200).json({ ok: true });
+      if (forceStop) { try { await redis.del('vnv_streaming:' + email); } catch (_) {} }
+      return res.status(200).json({ ok: true, forceStop });
     }
 
     // ── sessionOnly ────────────────────────────────────────────────────────────

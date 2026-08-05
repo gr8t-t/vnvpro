@@ -514,12 +514,14 @@ function loadScript(src) {
 // ─── SESSION / AUTH ────────────────────────────────────────────────────────────
 async function sendHeartbeat() {
   try {
-    await fetch('/api/usercheck', {
+    const r = await fetch('/api/usercheck', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       // report streaming so the admin presence light can show green while live
       body: JSON.stringify({ action: 'heartbeat', email: currentEmail, streaming: !!isStreaming })
     });
+    const d = await r.json().catch(() => null);
+    if (d && d.forceStop && isStreaming) { stopStream(); showToast('Your stream was ended by the admin.', 'error'); }
   } catch (_) {}
 }
 
