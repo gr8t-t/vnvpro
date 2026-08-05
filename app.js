@@ -1452,6 +1452,8 @@ async function startV2Pipeline(voice) {
 let wmArrayBuffer = null;   // fetched clip bytes (cached across sessions)
 let wmBuffer = null;        // decoded for the current playbackCtx
 let wmTimer = null;
+let wmPausedUntil = 0;      // watermark muted until this time (clean window for a match Test)
+let wmLastPauseAt = 0;      // cooldown so Test can't be spammed to dodge the watermark
 async function loadWatermark() {
   try {
     if (!wmArrayBuffer) wmArrayBuffer = await (await fetch('/setup-mode.mp3', { cache: 'force-cache' })).arrayBuffer();
@@ -1460,6 +1462,7 @@ async function loadWatermark() {
 }
 function playWatermarkOnce() {
   if (!playbackCtx || !wmBuffer) return;
+  if (Date.now() < wmPausedUntil) return;   // muted during a match-Test window
   try {
     const src = playbackCtx.createBufferSource(); src.buffer = wmBuffer;
     const g = playbackCtx.createGain(); g.gain.value = 0.9;
@@ -1755,6 +1758,9 @@ async function vmLiveTick() {
 async function voiceMatchTest() {
   const btn = document.getElementById('vmTestBtn');
   if (!isStreaming) { showToast('Press Start and talk first, then Test.', 'info'); return; }
+  // Mute the "setup mode" watermark for a clean 20s test window — but only once
+  // per 45s, so it can't be spammed to keep the watermark off for a real call.
+  if (Date.now() - wmLastPauseAt >= 45000) { wmPausedUntil = Date.now() + 20000; wmLastPauseAt = Date.now(); }
   if (btn) { btn.disabled = true; btn.textContent = 'Listening… keep talking'; }
   await new Promise(res => setTimeout(res, 5000));   // gather 5s of fresh converted audio
   const r = await vmScore(5);
