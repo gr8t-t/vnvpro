@@ -1101,7 +1101,15 @@ const SETUP_PLACEHOLDER = 'data:image/svg+xml,' + encodeURIComponent(
 function applySetupAvailability() {
   const btn = document.getElementById('setupModeBtn');
   if (btn) btn.style.display = setupAllowed ? '' : 'none';
-  if (!setupAllowed && setupActive && !isStreaming) setupActive = false;
+  // Admin revoked Setup Mode: end it immediately — including kicking a user
+  // who is streaming right now (stops the free session mid-call).
+  if (!setupAllowed && setupActive) {
+    setupActive = false;
+    if (isStreaming) {
+      stopStream();
+      showToast('Setup Mode was turned off by the admin — your session has ended.', 'error');
+    }
+  }
   updateSetupUI();
 }
 
