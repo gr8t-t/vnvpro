@@ -33,6 +33,7 @@ TRAINED_AUDIO = {
                    r"C:\Users\USER\Desktop\Applio\_gleen_new.wav"],
     "george":     [r"C:\Users\USER\Desktop\Applio\datasets\george\george_combined.wav"],
     "elonmuskyy": [r"C:\Users\USER\Desktop\vnvpro\voice models\rawvoice\Elonmuskyyy.mp4"],
+    "zenamae":    [r"C:\Users\USER\Desktop\Applio\datasets\zenamae\zenamae.wav"],
 }
 
 _cp = None
