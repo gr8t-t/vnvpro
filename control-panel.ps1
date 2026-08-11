@@ -50,6 +50,7 @@ $script:tunnelUrl         = $null
 $script:awaitingUrl       = $false
 $script:urlWaitTicks      = 0
 $script:tunnelWanted      = $false                      # true = watchdog keeps the tunnel alive
+$script:pushedUrl         = $null                       # last tunnel URL successfully pushed to the website
 $script:lastTick          = Get-Date                    # for detecting a sleep/resume gap
 $script:lastTunnelRestart = (Get-Date).AddMinutes(-10)  # restart cooldown
 $script:watchCounter      = 0
@@ -204,11 +205,17 @@ function Read-TunnelUrl {
 }
 
 function Push-UrlToWebsite([string]$url) {
-  try {
-    $body = @{ action = 'set_rvc_url'; password = $script:AdminPassword; url = $url } | ConvertTo-Json
-    Invoke-RestMethod -Uri $script:AdminApi -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 10 | Out-Null
-    return $true
-  } catch { return $false }
+  # Voice 2.0 rides the same rvc-server tunnel (/v2 proxy), so both URLs = the tunnel.
+  $ok = $false
+  foreach ($act in @('set_rvc_url', 'set_wokada_url')) {
+    try {
+      $body = @{ action = $act; password = $script:AdminPassword; url = $url } | ConvertTo-Json
+      Invoke-RestMethod -Uri $script:AdminApi -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 10 | Out-Null
+      if ($act -eq 'set_rvc_url') { $ok = $true }
+    } catch { }
+  }
+  if ($ok) { $script:pushedUrl = $url }
+  return $ok
 }
 
 # ---- log viewer ------------------------------------------------------------
@@ -444,6 +451,13 @@ $script:timer.Add_Tick({
         $script:footer.Text = 'Tunnel URL not found after 2 min - check the Tunnel log.'
       }
     }
+  }
+  # Self-heal: always keep the website pointed at the CURRENT tunnel URL. Covers an
+  # adopted tunnel, a watchdog restart handing out a new URL, or an earlier push
+  # that failed. Push-UrlToWebsite records pushedUrl on success, so this is a no-op
+  # once the site matches - it only fires when they've drifted apart.
+  if ($script:tunnelUrl -and $script:tunnelUrl -ne $script:pushedUrl) {
+    if (Push-UrlToWebsite $script:tunnelUrl) { $script:footer.Text = 'Website synced to current tunnel URL.' }
   }
   Update-VnvUI
 })
