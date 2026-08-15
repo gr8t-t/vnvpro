@@ -6,6 +6,7 @@ let engine = 'v1';                 // 'v1' (Standard) | 'v2' (Premium)
 let v2Pitch = 0;                   // Voice 2.0 pitch shift (semitones), user-adjustable slider
 let selectedVoice = null;
 let videoDelayMs = 0;              // ms to buffer video output (delays video to match slow audio)
+let videoModelId = 'lucy-2.5';     // Decart realtime model: 'lucy-2.5' (new, 1280x720) | 'lucy-2.1' (older)
 let frameBuffer = [];              // { time: DOMHighResTimeStamp, bmp: ImageBitmap }
 let captureIntervalId = null;      // setInterval handle for frame capture
 let delayRafId = null;             // requestAnimationFrame handle for delayed render
@@ -107,6 +108,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   setupVideoControls();
+
+  // Restore the user's last AI-model choice (defaults to Lucy 2.5)
+  try {
+    const savedModel = localStorage.getItem('vnv_video_model');
+    if (savedModel === 'lucy-2.1' || savedModel === 'lucy-2.5') videoModelId = savedModel;
+  } catch (_) {}
+  const modelSel = document.getElementById('modelSelect');
+  if (modelSel) modelSel.value = videoModelId;
 
   // Apply the default mode layout (Video Only) on load
   setMode('video');
@@ -672,12 +681,24 @@ function playPreview(e, id) {
 }
 
 // ─── MODE ──────────────────────────────────────────────────────────────────────
+// AI model picker (Decart realtime): 'lucy-2.5' (new) | 'lucy-2.1' (older).
+// Locked in at connect() time, so it can only change before Start; the whole
+// mode-selector row (which holds this dropdown) is greyed while streaming.
+function setVideoModel(v) {
+  videoModelId = (v === 'lucy-2.1') ? 'lucy-2.1' : 'lucy-2.5';
+  try { localStorage.setItem('vnv_video_model', videoModelId); } catch (_) {}
+}
+
 function setMode(m) {
   if (isStreaming) {
     showToast('Stop streaming before changing mode.', 'error');
     return;
   }
   mode = m;
+
+  // AI model picker only matters for video modes
+  const modelWrap = document.getElementById('modelSelectWrap');
+  if (modelWrap) modelWrap.style.display = (m === 'audio') ? 'none' : 'flex';
 
   // Update buttons
   const modeSelect = document.getElementById('modeSelect');
@@ -1025,7 +1046,7 @@ async function startVideoStream() {
 
   // Load the proven Decart SDK (same as the original working project)
   const { createDecartClient, models } = await import('https://esm.sh/@decartai/sdk');
-  const model = models.realtime('lucy-2.1');
+  const model = models.realtime(videoModelId);
   const client = createDecartClient({ apiKey: decartApiKey });
 
   realtimeClient = await client.realtime.connect(camStream, {

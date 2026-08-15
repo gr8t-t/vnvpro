@@ -643,6 +643,13 @@
           <option value="both">✨ Video + Voice</option>
           <option value="audio">🎙 Voice Only</option>
         </select>
+        <span id="modelSelectWrap" style="display:flex; align-items:center; gap:8px; margin-left:6px; padding-left:12px; border-left:1px solid var(--border);">
+          <label for="modelSelect" style="font-size:13px; font-weight:600; color:var(--text2);">AI Model</label>
+          <select id="modelSelect" class="form-input" style="max-width:170px; font-weight:600;" onchange="setVideoModel(this.value)" title="Lucy 2.5 is Decart's newest model (higher resolution). Lucy 2.1 is the older model. Pick before you press Start.">
+            <option value="lucy-2.5">Lucy 2.5 (new)</option>
+            <option value="lucy-2.1">Lucy 2.1</option>
+          </select>
+        </span>
       </div>
 
       <div class="app-columns">
