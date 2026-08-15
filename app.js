@@ -1993,6 +1993,8 @@ function selectPkg(id) {
   if (pkg) {
     document.getElementById('selectedPkgLabel').textContent = pkg.label + ' (' + pkg.coins.toLocaleString() + ' coins)';
     document.getElementById('selectedPkgPrice').textContent = '₦' + pkg.priceNaira.toLocaleString() + ' / $' + pkg.priceUsd;
+    const payBtn = document.getElementById('paystackPayBtn');
+    if (payBtn) payBtn.textContent = 'Pay ₦' + pkg.priceNaira.toLocaleString() + ' now';
   }
   renderPackages();
 }
@@ -2076,6 +2078,71 @@ async function submitBankTopup() {
   } catch (_) {
     showToast('Network error. Please try again.', 'error');
   }
+}
+
+// ── Paystack: instant card / bank-transfer / USSD payment (auto-credits) ───────
+// Server initialises the transaction (amount fixed server-side), we open the
+// Paystack popup with the returned access code, then verify on success so coins
+// land immediately. The webhook credits too, as a backstop if the tab is closed.
+async function payWithPaystack() {
+  if (!selectedPkgId) { showToast('Please select a package first.', 'error'); return; }
+  if (typeof PaystackPop === 'undefined') { showToast('Payment is still loading — try again in a moment.', 'error'); return; }
+
+  const btn = document.getElementById('paystackPayBtn');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting…'; }
+
+  let init;
+  try {
+    const res = await fetch('/api/paystack', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'init', email: currentEmail, packageId: selectedPkgId })
+    });
+    init = await res.json();
+    if (!res.ok || !init.ok) throw new Error(init.error || 'Could not start payment.');
+  } catch (e) {
+    showToast(e.message || 'Could not start payment.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+    return;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = orig; }
+
+  const reference = init.reference;
+  try {
+    const popup = new PaystackPop();
+    popup.resumeTransaction(init.accessCode, {
+      onSuccess: (txn) => confirmPaystack((txn && txn.reference) || reference),
+      onCancel:  () => showToast('Payment cancelled.', 'info'),
+      onError:   (err) => showToast('Payment error: ' + ((err && err.message) || 'unknown'), 'error'),
+    });
+  } catch (e) {
+    showToast('Could not open the payment window.', 'error');
+  }
+}
+
+async function confirmPaystack(reference) {
+  showToast('Payment received — adding your coins…', 'success');
+  // Verify server-side (retry briefly in case of a race with the webhook).
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch('/api/paystack', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', reference })
+      });
+      const d = await res.json();
+      if (res.ok && d.ok) {
+        await loadBalance();
+        showToast('Success! ' + (d.coins || 0).toLocaleString() + ' coins added.', 'success');
+        closeBuyCoins();
+        return;
+      }
+    } catch (_) {}
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  // Verify didn't confirm yet — the webhook will still credit within a minute.
+  await loadBalance();
+  showToast('Payment received. Your coins will appear shortly.', 'info');
+  closeBuyCoins();
 }
 
 // ─── VOICE REQUEST ─────────────────────────────────────────────────────────────

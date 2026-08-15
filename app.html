@@ -866,13 +866,22 @@
 
       <!-- Network tabs -->
       <div class="network-tabs">
-        <button class="network-tab active" onclick="switchNetworkTab('trc20', this)">TRC20</button>
+        <button class="network-tab active" onclick="switchNetworkTab('paystack', this)">💳 Card / Transfer</button>
+        <button class="network-tab" onclick="switchNetworkTab('trc20', this)">TRC20</button>
         <button class="network-tab" onclick="switchNetworkTab('erc20', this)">ERC20</button>
         <button class="network-tab" onclick="switchNetworkTab('btc', this)">BTC</button>
         <button class="network-tab" onclick="switchNetworkTab('bank', this)">Bank</button>
       </div>
 
-      <div class="network-pane active" id="ntrc20">
+      <div class="network-pane active" id="npaystack">
+        <div style="margin-bottom:14px; padding:12px; background:var(--bg3); border-radius:8px; font-size:13px; color:var(--text2); line-height:1.6;">
+          Pay with your <strong style="color:var(--text)">card, bank transfer or USSD</strong>. Your coins are added
+          <strong style="color:var(--accent2)">automatically</strong> the moment payment succeeds — no waiting for approval.
+        </div>
+        <button class="btn btn-primary w-full" id="paystackPayBtn" onclick="payWithPaystack()">Pay Now</button>
+      </div>
+
+      <div class="network-pane" id="ntrc20">
         <div class="form-group">
           <label class="form-label">TRC20 USDT Address</label>
           <div style="display:flex;gap:8px;">
@@ -1107,6 +1116,7 @@
   </div>
 
   <div id="toast"></div>
+  <script src="https://js.paystack.co/v2/inline.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
