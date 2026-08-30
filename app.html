@@ -655,8 +655,16 @@
       <div class="app-columns">
         <!-- Voice panel -->
         <div class="voice-panel" id="voicePanel">
-          <div class="panel-header">Voice Engine</div>
-          <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
+          <!-- Studio: run the voice engine on your own computer (own GPU) -->
+          <div style="padding:12px; border-bottom:1px solid var(--border);">
+            <button id="studioToggleBtn" class="btn btn-secondary btn-sm w-full" onclick="toggleStudio()">Studio: Off</button>
+            <div id="studioHint" style="display:none; margin-top:8px; font-size:11px; color:var(--text2); line-height:1.5;">
+              Voice runs on <strong style="color:var(--text)">your own computer</strong> — make sure your Voice app is turned on.
+              <button class="btn btn-ghost btn-sm" style="font-size:10px; padding:3px 8px; margin-top:6px;" onclick="openStudioGuide()">Get / open the Voice app</button>
+            </div>
+          </div>
+          <div class="panel-header" id="engineHeader">Voice Engine</div>
+          <div id="engineToggleRow" style="padding:12px; border-bottom:1px solid var(--border); display:flex; gap:8px;">
             <button type="button" id="engineV1Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v1')">Voice 1.0</button>
             <button type="button" id="engineV2Btn" class="btn btn-sm" style="flex:1;" onclick="setEngine('v2')">Voice 2.0 ✦</button>
           </div>
@@ -1111,6 +1119,27 @@
 
         <button class="btn btn-primary w-full" onclick="closeV2Guide()">Got it — I'm all set!</button>
         <button class="btn btn-ghost btn-sm w-full" style="margin-top:8px;" onclick="setEngine('v1'); closeV2Guide();">Use Voice 1.0 instead (no download needed)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Studio Guide Modal -->
+  <div class="modal-overlay hidden" id="studioGuideModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Studio — voice on your own computer</span>
+        <button class="modal-close" onclick="closeStudioGuide()">✕</button>
+      </div>
+      <div style="font-size:14px; color:var(--text2); line-height:1.6;">
+        <p>Studio runs the voice on <strong style="color:var(--text)">your own computer</strong>, so you don't pay for voice — only video.</p>
+        <ol style="padding-left:18px; margin:14px 0;">
+          <li>Download the Voice app below.</li>
+          <li>Unzip it and open the folder.</li>
+          <li>Double-click <strong>vnvpro Voice</strong> and switch it <strong>On</strong>.</li>
+          <li>Come back here and reload this page.</li>
+        </ol>
+        <a id="studioDownloadBtn" class="btn btn-primary w-full" href="#" target="_blank" rel="noopener">Download the Voice app</a>
+        <p style="font-size:11px; margin-top:12px;">When you're done, open the Voice app and switch it Off.</p>
       </div>
     </div>
   </div>

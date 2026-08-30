@@ -1,3 +1,9 @@
 logs/
 rvc-server/venv/
 rvc-server/models/
+voice models/
+
+# Studio bundle build artifacts (never commit these)
+studio/studio-proxy.exe
+studio/_build/
+studio/*.log

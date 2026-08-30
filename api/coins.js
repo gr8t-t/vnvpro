@@ -133,7 +133,10 @@ export default async function handler(req, res) {
       } catch (_) {}
       let forceStop = false;
       try { forceStop = !!(await redis.get('vnv_force_stop:' + email)); } catch (_) {}
-      return res.status(200).json({ balance: bal, setupMode, forceStop });
+      // Studio = user runs the voice engine on their OWN GPU (self-serve toggle).
+      let studio = false;
+      try { studio = !!(await redis.get('vnv_studio:' + email)); } catch (_) {}
+      return res.status(200).json({ balance: bal, setupMode, forceStop, studio });
     }
 
     // ── drain ──────────────────────────────────────────────────────────────────
@@ -143,11 +146,22 @@ export default async function handler(req, res) {
       const mode = body.mode || 'video';
 
       const rates = await getRates();
-      const rate = rates[mode] ?? rates.video;
-      const cost = rate * seconds;
+      // Studio users run voice on their own GPU → charge only the Decart (video/edit)
+      // part; voice-only modes are free. Read server-side so it can't be faked.
+      let studio = false;
+      try { studio = !!(await redis.get('vnv_studio:' + email)); } catch (_) {}
+      let cost;
+      if (studio) {
+        if (mode === 'edit') cost = (rates.edit ?? 6.0) * seconds;
+        else if (mode === 'video' || mode === 'both' || mode === 'both2') cost = (rates.video ?? 2.0) * seconds;
+        else cost = 0;   // audio / audio2 / record → free for Studio
+      } else {
+        const rate = rates[mode] ?? rates.video;
+        cost = rate * seconds;
+      }
 
       const bal = await getBalance(email);
-      if (bal <= 0) {
+      if (cost > 0 && bal <= 0) {
         return res.status(402).json({ error: 'Insufficient coins', balance: 0 });
       }
 
@@ -155,6 +169,15 @@ export default async function handler(req, res) {
       await setBalance(email, newBal);
       await logUsage(email, mode, bal - newBal, seconds);   // record actual coins spent for analytics
       return res.status(200).json({ ok: true, balance: newBal, drained: cost });
+    }
+
+    // ── set_studio (self-serve: user turns their own-GPU voice mode on/off) ──────
+    if (action === 'set_studio') {
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+      const on = !!body.on;
+      if (on) await redis.set('vnv_studio:' + email, '1');
+      else await redis.del('vnv_studio:' + email);
+      return res.status(200).json({ ok: true, studio: on });
     }
 
     // ── usage (analytics: user's own, or admin platform / per-user) ─────────────

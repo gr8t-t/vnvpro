@@ -15,6 +15,64 @@ let v2HeartbeatInterval = null;
 let v1HeartbeatInterval = null;
 let waitPollInterval = null;
 let rvcServerUrl = null;
+const LOCAL_VOICE_URL = 'http://127.0.0.1:8765';   // Studio: voice engine on the user's OWN machine
+const STUDIO_DOWNLOAD_URL = 'https://REPLACE-WITH-YOUR-DOWNLOAD-LINK';  // hosted vnvpro-studio.zip
+let studioMode = false;                            // user runs voice on their own GPU (from balance)
+let sharedRvcUrl = null;                            // the shared voice server URL (admin get_rvc_url)
+
+// Point all voice calls at the right engine: localhost when Studio is on, the
+// shared server otherwise. Every /v2, /convert, /ws, /score call uses rvcServerUrl.
+function applyVoiceRouting() {
+  rvcServerUrl = studioMode ? LOCAL_VOICE_URL : sharedRvcUrl;
+}
+
+// Reflect the Studio state in the UI: hide the engine toggle (Voice 2.0 only) and
+// show the "your own computer" hint when on.
+function updateStudioUI() {
+  const btn = document.getElementById('studioToggleBtn');
+  const hint = document.getElementById('studioHint');
+  const engHeader = document.getElementById('engineHeader');
+  const engRow = document.getElementById('engineToggleRow');
+  if (btn) {
+    btn.textContent = 'Studio: ' + (studioMode ? 'On' : 'Off');
+    btn.classList.toggle('btn-primary', studioMode);
+    btn.classList.toggle('btn-secondary', !studioMode);
+  }
+  if (hint) hint.style.display = studioMode ? '' : 'none';
+  if (engHeader) engHeader.style.display = studioMode ? 'none' : '';
+  if (engRow) engRow.style.display = studioMode ? 'none' : '';
+  if (studioMode && engine !== 'v2') setEngine('v2');
+}
+
+async function toggleStudio() {
+  if (isStreaming) { showToast('Stop streaming before changing Studio.', 'error'); return; }
+  const turnOn = !studioMode;
+  try {
+    const res = await fetch('/api/coins', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_studio', email: currentEmail, on: turnOn })
+    });
+    const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error(d.error || 'Could not change Studio.');
+    studioMode = turnOn;
+    if (!turnOn) await loadRvcUrl();   // refresh the shared server URL
+    applyVoiceRouting();
+    updateStudioUI();
+    if (turnOn) openStudioGuide();
+    showToast(turnOn ? 'Studio on — voice runs on your computer.' : 'Studio off — voice runs on our server.', 'success');
+  } catch (e) {
+    showToast(e.message || 'Could not change Studio.', 'error');
+  }
+}
+
+function openStudioGuide() {
+  const dl = document.getElementById('studioDownloadBtn');
+  if (dl) dl.href = STUDIO_DOWNLOAD_URL;
+  document.getElementById('studioGuideModal')?.classList.remove('hidden');
+}
+function closeStudioGuide() {
+  document.getElementById('studioGuideModal')?.classList.add('hidden');
+}
 let enginesOnline = { v1: true, v2: true };   // updated by health polling; greys engines when servers are off
 let engineHealthInterval = null;
 let audioCtx = null;
@@ -555,6 +613,10 @@ async function loadBalance() {
       stopStream();
       showToast('Your stream was ended by the admin.', 'error');
     }
+    const wasStudio = studioMode;
+    studioMode = !!data.studio;
+    applyVoiceRouting();
+    if (studioMode !== wasStudio) updateStudioUI();
     applySetupAvailability();
   } catch (_) {}
 }
@@ -594,8 +656,9 @@ async function loadRvcUrl() {
       body: JSON.stringify({ action: 'get_rvc_url' })
     });
     const data = await res.json();
-    rvcServerUrl = data.url || null;
+    sharedRvcUrl = data.url || null;
   } catch (_) {}
+  applyVoiceRouting();
 }
 
 // ─── VOICES ────────────────────────────────────────────────────────────────────
@@ -1673,6 +1736,7 @@ async function drainCoins(seconds, modeOverride) {
 // ─── VOICE ENGINE (1.0 vs 2.0, slot + waitlist) ────────────────────────────────
 function setEngine(e) {
   if (isStreaming) { showToast('Stop streaming before switching engines.', 'error'); return; }
+  if (studioMode) e = 'v2';   // Studio users run their own engine — Voice 2.0 only
   engine = e;
   const v1 = document.getElementById('engineV1Btn');
   const v2 = document.getElementById('engineV2Btn');
@@ -1817,6 +1881,13 @@ function closeV2Guide() {
 }
 
 async function voice2Api(action) {
+  // Studio users run their own engine — never touch the shared Voice 2.0 slot/queue.
+  if (studioMode && action.startsWith('v2_')) {
+    if (action === 'v2_acquire')   return { ok: true, state: 'active' };
+    if (action === 'v2_heartbeat') return { ok: true };
+    if (action === 'v2_status')    return { state: 'active', queueLen: 0 };
+    return { ok: true };
+  }
   const res = await fetch('/api/voice2', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, email: currentEmail })
