@@ -40,6 +40,8 @@ Copy-Item (Join-Path $root 'studio-proxy.exe')  $stage -Force
 Copy-Item (Join-Path $root 'studio-launch.ps1') $stage -Force
 Copy-Item (Join-Path $root 'vnvpro Voice.bat')  $stage -Force
 Copy-Item (Join-Path $root 'proxy.py')          $stage -Force   # fallback source if the exe is ever blocked
+Copy-Item (Join-Path $root 'install-voice.ps1') $stage -Force   # installs a voice pack the admin sends later
+Copy-Item (Join-Path $root 'Install Voice.bat') $stage -Force
 
 Write-Host 'Zipping (contents at root -> one clean folder on Extract All)...' -ForegroundColor Cyan
 if (Test-Path $zip) { Remove-Item $zip -Force }

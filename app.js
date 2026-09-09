@@ -16,7 +16,7 @@ let v1HeartbeatInterval = null;
 let waitPollInterval = null;
 let rvcServerUrl = null;
 const LOCAL_VOICE_URL = 'http://127.0.0.1:8765';   // Studio: voice engine on the user's OWN machine
-const STUDIO_DOWNLOAD_URL = 'https://REPLACE-WITH-YOUR-DOWNLOAD-LINK';  // hosted vnvpro-studio.zip
+const STUDIO_DOWNLOAD_URL = 'https://drive.google.com/file/d/1OdEMcxk8jI1__6osN5cJSpY-kGGE0QQL/view?usp=sharing';  // hosted vnvpro-studio.zip
 let studioMode = false;                            // user runs voice on their own GPU (from balance)
 let sharedRvcUrl = null;                            // the shared voice server URL (admin get_rvc_url)
 
