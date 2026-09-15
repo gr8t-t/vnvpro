@@ -4,136 +4,339 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Home — VNV Pro</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    .home-main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 60px; }
-    .home-hello { margin-bottom: 6px; font-size: 26px; font-weight: 800; }
-    .home-sub { color: var(--text2); font-size: 14px; margin-bottom: 28px; }
-    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-    .tool-card {
-      display: block; text-decoration: none; color: inherit;
-      background: var(--bg2); border: 1px solid var(--border); border-radius: 16px;
-      padding: 22px; position: relative; transition: transform .12s, border-color .12s, box-shadow .12s;
+    :root{
+      --bg:#060607; --bg-elev:#0b0b0f;
+      --card-top:#151519; --card-bot:#0a0a0d;
+      --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+      --text:#f4f4f6; --text-2:#9a9aa5; --text-3:#616169;
+      --accent:#ada1ff; --accent-2:#8b7bf0; --accent-soft:rgba(150,135,255,.13);
+      --red:#f87171;
+      --maxw:1180px;
+      --sans:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
+      --body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+      --serif:'Instrument Serif',Georgia,serif;
     }
-    a.tool-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: var(--shadow); }
-    .tool-card.soon { opacity: .55; cursor: not-allowed; }
-    .tool-icon { font-size: 30px; margin-bottom: 12px; }
-    .tool-name { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-    .tool-desc { font-size: 13px; color: var(--text2); line-height: 1.55; }
-    .tool-badge {
-      position: absolute; top: 14px; right: 14px; font-size: 10px; font-weight: 700;
-      padding: 3px 8px; border-radius: 999px; letter-spacing: .3px;
-    }
-    .badge-new  { background: var(--accent); color: #fff; }
-    .badge-soon { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:var(--body);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+    ::selection{background:var(--accent-soft);color:#fff}
+    ::-webkit-scrollbar{width:8px;height:8px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:#26262e;border-radius:4px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--accent-2)}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+    .glowfield{position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:radial-gradient(60% 42% at 74% 8%, rgba(139,123,240,.16), transparent 60%),radial-gradient(50% 40% at 12% 0%, rgba(120,110,200,.08), transparent 55%)}
+    .content{position:relative;z-index:1}
 
-    .code-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
-    .code-modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 400px; box-shadow: var(--shadow); }
-    .code-modal h3 { font-size: 19px; font-weight: 700; }
-    .code-value { font-family: monospace; font-size: 22px; font-weight: 700; letter-spacing: 1px; text-align: center; background: var(--bg3); border: 1px dashed var(--border); border-radius: 10px; padding: 16px; color: var(--accent2); word-break: break-all; }
-    .code-err { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--red); margin-bottom: 14px; }
+    nav{position:sticky;top:0;z-index:50;background:rgba(6,6,7,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+    .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+    .brand{display:flex;align-items:center;gap:11px;font-family:var(--sans);font-weight:600;font-size:16px;letter-spacing:-.01em;color:var(--text)}
+    .brand .mark{width:26px;height:26px;flex:none}
+    .nav-right{display:flex;align-items:center;gap:10px}
+    .coin{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--text-2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-variant-numeric:tabular-nums;transition:border-color .2s,color .2s;cursor:pointer}
+    .coin:hover{border-color:var(--line-2);color:var(--text)}
+    .coin b{color:var(--text);font-weight:600}
+    .coin .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+    .ghost{font-family:var(--body);font-size:13px;color:var(--text-2);background:none;border:1px solid transparent;border-radius:9px;padding:7px 12px;cursor:pointer;transition:.2s}
+    .ghost:hover{color:var(--text);border-color:var(--line);background:rgba(255,255,255,.03)}
+
+    header.hero{padding:88px 0 76px}
+    .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-2);border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+    .eyebrow .pip{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+    h1.hero-title{font-family:var(--sans);font-weight:600;letter-spacing:-.035em;line-height:1.02;font-size:clamp(44px,7.4vw,88px);margin:26px 0 0;text-wrap:balance;max-width:14ch}
+    h1.hero-title em{font-family:var(--serif);font-style:italic;font-weight:400;background:linear-gradient(180deg,#fff,#b9b0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hero-sub{margin-top:26px;max-width:52ch;color:var(--text-2);font-size:18px;line-height:1.65}
+    .hero-cta{margin-top:38px;display:flex;flex-wrap:wrap;gap:14px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:var(--body);font-weight:500;font-size:15px;border-radius:12px;padding:13px 22px;cursor:pointer;border:1px solid transparent;transition:.22s}
+    .btn-primary{background:var(--text);color:#0a0a0d}
+    .btn-primary:hover{background:#fff;transform:translateY(-2px);box-shadow:0 12px 30px rgba(173,161,255,.18)}
+    .btn-ghost2{background:transparent;color:var(--text);border-color:var(--line-2)}
+    .btn-ghost2:hover{border-color:var(--accent);color:#fff;transform:translateY(-2px)}
+    .btn .arr{transition:transform .22s}
+    .btn:hover .arr{transform:translate(3px,-3px)}
+
+    .sec{padding:70px 0}
+    .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding-bottom:34px;border-bottom:1px solid var(--line);margin-bottom:44px}
+    .sec-tag{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+    .sec-h{font-family:var(--sans);font-weight:600;letter-spacing:-.03em;font-size:clamp(30px,4.6vw,52px);line-height:1.04;text-wrap:balance;margin-top:8px}
+    .sec-note{color:var(--text-2);font-size:15px;max-width:30ch;text-align:right}
+
+    .tools{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:22px;overflow:hidden}
+    .tool{position:relative;display:flex;flex-direction:column;min-height:290px;padding:26px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.015),transparent);transition:background .3s;color:var(--text)}
+    .tool:hover{background:radial-gradient(120% 90% at 50% 0%,rgba(139,123,240,.12),transparent 70%)}
+    a.tool:hover{transform:none}
+    .tool.soon{opacity:.42;cursor:default}
+    .tool.soon:hover{background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
+    .tile{width:60px;height:60px;border-radius:15px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--card-top),var(--card-bot));border:1px solid var(--line-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 22px rgba(0,0,0,.45);color:#d6d6e2}
+    .tile svg{width:28px;height:28px}
+    .tool:hover .tile{color:var(--accent)}
+    .tnum{position:absolute;top:24px;right:24px;font-size:12px;color:var(--text-3);letter-spacing:.08em}
+    .tspacer{flex:1}
+    .tname{font-family:var(--sans);font-weight:600;font-size:20px;letter-spacing:-.01em;margin-bottom:8px}
+    .tdesc{color:var(--text-2);font-size:13.5px;line-height:1.55}
+    .tbadge{position:absolute;top:22px;left:26px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border:1px solid rgba(173,161,255,.28);border-radius:999px;padding:3px 9px}
+    .tbadge.gray{color:var(--text-3);background:rgba(255,255,255,.03);border-color:var(--line)}
+    .tool .go{margin-top:16px;font-size:13px;color:var(--text-3);display:inline-flex;align-items:center;gap:7px;transition:color .2s}
+    .tool:hover .go{color:var(--accent)}
+
+    .stats-wrap{background:var(--bg-elev);border:1px solid var(--line);border-radius:24px;padding:56px 40px;position:relative;overflow:hidden}
+    .stats-wrap::before{content:"";position:absolute;inset:0;opacity:.5;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:linear-gradient(180deg,transparent,#000 60%,transparent);mask-image:linear-gradient(180deg,transparent,#000 60%,transparent)}
+    .stats{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:30px}
+    .stat .slab{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-2);padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:20px}
+    .stat .snum{font-family:var(--sans);font-weight:500;letter-spacing:-.04em;line-height:1;font-size:clamp(52px,8vw,92px);background:linear-gradient(180deg,#fff 25%,#8f8f9c);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .stat .sfoot{margin-top:14px;color:var(--text-2);font-size:14px}
+
+    footer{padding:80px 0 40px;border-top:1px solid var(--line);margin-top:70px}
+    .foot-top{display:flex;flex-wrap:wrap;gap:40px;justify-content:space-between;margin-bottom:40px}
+    .foot-contact{font-size:14px;color:var(--text-2);line-height:1.9}
+    .foot-contact b{color:var(--text);font-weight:600;font-family:var(--sans)}
+    .foot-cols{display:flex;gap:64px;flex-wrap:wrap}
+    .foot-col h4{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;font-weight:600}
+    .foot-col a{display:block;font-size:15px;color:var(--text-2);padding:5px 0;transition:color .2s;cursor:pointer}
+    .foot-col a:hover{color:var(--accent)}
+    .wordmark{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(84px,21vw,280px);line-height:.8;letter-spacing:-.02em;background:linear-gradient(180deg,#2a2a31,#0e0e12 82%);-webkit-background-clip:text;background-clip:text;color:transparent;user-select:none;white-space:nowrap;text-align:center;margin:10px 0 26px}
+    .foot-legal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding-top:26px;border-top:1px solid var(--line);color:var(--text-3);font-size:13px}
+
+    @media (prefers-reduced-motion:no-preference){
+      .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+      .reveal.in{opacity:1;transform:none}
+      .stagger>*{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+      .stagger.in>*{opacity:1;transform:none}
+    }
+
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;z-index:100;padding:20px}
+    .dialog{background:linear-gradient(180deg,#111116,#0a0a0e);border:1px solid var(--line-2);border-radius:20px;padding:30px;width:100%;max-width:420px;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+    .dialog h3{font-family:var(--sans);font-weight:600;font-size:21px;margin-bottom:8px}
+    .dialog p{color:var(--text-2);font-size:13.5px;line-height:1.6;margin-bottom:20px}
+    .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:7px}
+    .field input{width:100%;background:#0a0a0e;border:1px solid var(--line-2);border-radius:11px;padding:12px 14px;color:var(--text);font-family:var(--body);font-size:14px;outline:none;transition:border-color .2s}
+    .field input:focus{border-color:var(--accent)}
+    .dialog .btn{width:100%;margin-top:12px}
+    .codeval{font-family:'Space Grotesk',monospace;font-size:22px;font-weight:600;letter-spacing:2px;text-align:center;color:var(--accent);background:#0a0a0e;border:1px dashed var(--line-2);border-radius:12px;padding:18px;word-break:break-all}
+    .codeerr{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--red);margin-bottom:14px}
+
+    #toast{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:360px}
+    .toast-item{background:#131318;border:1px solid var(--line-2);border-radius:12px;padding:12px 16px;font-size:14px;color:var(--text)}
+
+    @media(max-width:900px){
+      .tools{grid-template-columns:repeat(2,1fr)}
+      .sec-note{display:none}
+      .stats{grid-template-columns:1fr;gap:10px}
+      .stat{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--line)}
+      .stat .slab{border:none;padding:0;margin:0;flex:1}
+      .stat .snum{font-size:44px}
+      .stat .sfoot{display:none}
+    }
+    @media(max-width:560px){
+      .tools{grid-template-columns:1fr}
+      .coin{display:none}
+      header.hero{padding:60px 0 50px}
+    }
   </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="header-left">
-      <a href="home.html" class="app-logo">
-        <div class="logo-icon">✦</div>
-        VNV Pro
-      </a>
-      <div class="coin-chip" id="coinChip" onclick="location.href='app.html'">
-        🪙 <span id="coinBalance">—</span> coins
-      </div>
-    </div>
-    <div class="header-right">
-      <button class="btn btn-ghost btn-sm" id="codeBtn" onclick="openCodeModal()">🔑 Access Code</button>
-      <button class="btn btn-ghost btn-sm" id="logoutBtn" onclick="logout()">Logout</button>
-    </div>
-  </header>
+  <div class="glowfield"></div>
+  <div class="content">
 
-  <main class="home-main">
-    <div class="home-hello">Welcome to VNV Pro</div>
-    <div class="home-sub">Pick a tool to get started.</div>
-
-    <div class="tool-grid">
-      <a class="tool-card" href="app.html">
-        <div class="tool-icon">🎥</div>
-        <div class="tool-name">Realtime</div>
-        <div class="tool-desc">Live transformation — Voice Only, Voice&nbsp;+&nbsp;Video, or Video Only. Talk and appear as another voice/face in real time.</div>
-      </a>
-
-      <a class="tool-card" href="editor.html">
-        <span class="tool-badge badge-new">New</span>
-        <div class="tool-icon">🎬</div>
-        <div class="tool-name">Video Editor</div>
-        <div class="tool-desc">Upload a video, edit it with a text prompt, or swap in a person from a reference image — then download the result.</div>
-      </a>
-
-      <a class="tool-card" href="tts.html">
-        <span class="tool-badge badge-new">New · Free</span>
-        <div class="tool-icon">🗣️</div>
-        <div class="tool-name">Text to Speech</div>
-        <div class="tool-desc">Type text and hear it spoken — in a natural voice or one of your custom VNV voices.</div>
-      </a>
-
-      <a class="tool-card" href="voiceswap.html">
-        <span class="tool-badge badge-new">New</span>
-        <div class="tool-icon">🎙️</div>
-        <div class="tool-name">Voice Swap</div>
-        <div class="tool-desc">Record or upload an MP3/WAV and convert it into any voice you choose, then download.</div>
-      </a>
-
-      <a class="tool-card" href="usage.html">
-        <span class="tool-badge badge-new">New</span>
-        <div class="tool-icon">📊</div>
-        <div class="tool-name">Usage &amp; Coins</div>
-        <div class="tool-desc">See how your coins are spent — daily, weekly, monthly — on what, and when.</div>
-      </a>
-
-      <div class="tool-card soon">
-        <span class="tool-badge badge-soon">Coming soon</span>
-        <div class="tool-icon">🏦</div>
-        <div class="tool-name">Banking</div>
-        <div class="tool-desc">Coming later.</div>
-      </div>
-
-      <div class="tool-card soon">
-        <span class="tool-badge badge-soon">Coming soon</span>
-        <div class="tool-icon">📦</div>
-        <div class="tool-name">Consignment</div>
-        <div class="tool-desc">Coming later.</div>
-      </div>
-    </div>
-  </main>
-
-  <!-- Access-code retrieval (recovery key) -->
-  <div id="codeModal" class="code-modal-overlay" style="display:none;">
-    <div class="code-modal">
-      <h3>Your access code</h3>
-      <p style="color:var(--text2); font-size:13px; margin:6px 0 16px; line-height:1.55;">
-        This is your <b>recovery key</b> — save it somewhere safe. You'll need it to reset your password if you ever forget it. Confirm your password to view it.
-      </p>
-      <div id="codeError" class="code-err" style="display:none;"></div>
-      <div id="codeStage1">
-        <div class="form-group">
-          <label class="form-label" for="codePw">Your password</label>
-          <input type="password" id="codePw" class="form-input" placeholder="Your current password" autocomplete="current-password">
+    <nav>
+      <div class="wrap nav-in">
+        <a class="brand" href="home.html">
+          <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <defs><linearGradient id="lm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9adff"/><stop offset="1" stop-color="#7d6cf0"/></linearGradient></defs>
+            <path d="M9 8h13a7 7 0 0 1 7 7v3H20a5 5 0 0 0-5 5v9H9z" fill="url(#lm)"/>
+            <path d="M31 22v10h-9a7 7 0 0 1-7-7v-1h11a5 5 0 0 0 5-5z" fill="url(#lm)" opacity=".55"/>
+          </svg>
+          VNV&nbsp;Pro
+        </a>
+        <div class="nav-right">
+          <span class="coin" id="coinChip" onclick="location.href='app.html'"><span class="dot"></span><b id="coinBalance">—</b> coins</span>
+          <button class="ghost" id="codeBtn" onclick="openCodeModal()">Access Code</button>
+          <button class="ghost" id="logoutBtn" onclick="logout()">Logout</button>
         </div>
-        <button class="btn btn-primary w-full" id="codeShowBtn" onclick="revealCode()">Show my code</button>
+      </div>
+    </nav>
+
+    <header class="hero" id="top">
+      <div class="wrap">
+        <span class="eyebrow"><span class="pip"></span>Real-time AI voice &amp; video</span>
+        <h1 class="hero-title">Sound like anyone.<br>Look like <em>anyone.</em> Live.</h1>
+        <p class="hero-sub">VNV Pro transforms your voice and face in real time — talk on any call and appear as another voice, another face, or both, with under a second of delay.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="app.html">Open Realtime <span class="arr">↗</span></a>
+          <a class="btn btn-ghost2" href="#tools">Explore the tools</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="sec" id="tools">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <div>
+            <div class="sec-tag">/ Your studio</div>
+            <h2 class="sec-h">What you can do</h2>
+          </div>
+          <p class="sec-note">Five live tools. Pick one and go — everything runs in your browser.</p>
+        </div>
+
+        <div class="tools stagger">
+          <a class="tool" href="app.html">
+            <span class="tnum">/01</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Realtime</div>
+            <div class="tdesc">Live transformation — Voice Only, Voice&nbsp;+&nbsp;Video, or Video Only. Talk and appear as another voice or face in real time.</div>
+            <span class="go">Launch ↗</span>
+          </a>
+
+          <a class="tool" href="editor.html">
+            <span class="tbadge">New</span><span class="tnum">/02</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5M8 20v-5M16 20v-5"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Video Editor</div>
+            <div class="tdesc">Upload a video, edit it with a text prompt, or swap in a person from a reference image — then download the result.</div>
+            <span class="go">Open ↗</span>
+          </a>
+
+          <a class="tool" href="tts.html">
+            <span class="tbadge">New · Free</span><span class="tnum">/03</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8v8M8 5v14M12 9v6M16 6v12M20 9v6"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Text to Speech</div>
+            <div class="tdesc">Type text and hear it spoken — in a natural voice or one of your custom VNV voices.</div>
+            <span class="go">Open ↗</span>
+          </a>
+
+          <a class="tool" href="voiceswap.html">
+            <span class="tbadge">New</span><span class="tnum">/04</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Voice Swap</div>
+            <div class="tdesc">Record or upload an MP3/WAV and convert it into any voice you choose, then download.</div>
+            <span class="go">Open ↗</span>
+          </a>
+
+          <a class="tool" href="usage.html">
+            <span class="tbadge">New</span><span class="tnum">/05</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Usage &amp; Coins</div>
+            <div class="tdesc">See how your coins are spent — daily, weekly, monthly — on what, and when.</div>
+            <span class="go">Open ↗</span>
+          </a>
+
+          <div class="tool soon">
+            <span class="tbadge gray">Coming soon</span><span class="tnum">/06</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M4 10h16M5 10l7-5 7 5M6 10v11M18 10v11M10 10v11M14 10v11"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Banking</div>
+            <div class="tdesc">Coming later.</div>
+          </div>
+
+          <div class="tool soon">
+            <span class="tbadge gray">Coming soon</span><span class="tnum">/07</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l9-5 9 5v8l-9 5-9-5z M3 8l9 5 9-5M12 13v8"/></svg></div>
+            <div class="tspacer"></div>
+            <div class="tname">Consignment</div>
+            <div class="tdesc">Coming later.</div>
+          </div>
+
+          <div class="tool" style="justify-content:center;background:radial-gradient(120% 90% at 50% 0%,rgba(139,123,240,.10),transparent 70%)">
+            <div class="tname" style="font-family:var(--serif);font-style:italic;font-size:28px;font-weight:400;line-height:1.2">More<br>coming.</div>
+            <div class="tdesc" style="margin-top:8px">New tools ship to VNV Pro regularly.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="stats">
+      <div class="wrap">
+        <div class="stats-wrap reveal">
+          <div class="stats">
+            <div class="stat">
+              <div class="slab">Custom voices</div>
+              <div class="snum">7</div>
+              <div class="sfoot">Ready to speak as, plus your own.</div>
+            </div>
+            <div class="stat">
+              <div class="slab">Live video · Lucy</div>
+              <div class="snum">720p</div>
+              <div class="sfoot">Decart Lucy 2.5, HD in real time.</div>
+            </div>
+            <div class="stat">
+              <div class="slab">Voice delay</div>
+              <div class="snum">&lt;1s</div>
+              <div class="sfoot">Talk naturally on any call.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot-top reveal">
+          <div class="foot-contact">
+            <b>VNV&nbsp;Pro</b><br>
+            Real-time voice &amp; video studio<br>
+            Transform live on any call.
+          </div>
+          <div class="foot-cols">
+            <div class="foot-col">
+              <h4>Tools</h4>
+              <a href="app.html">Realtime</a>
+              <a href="editor.html">Video Editor</a>
+              <a href="tts.html">Text to Speech</a>
+              <a href="voiceswap.html">Voice Swap</a>
+            </div>
+            <div class="foot-col">
+              <h4>Account</h4>
+              <a href="usage.html">Usage &amp; Coins</a>
+              <a onclick="openCodeModal()">Access Code</a>
+              <a onclick="logout()">Log out</a>
+            </div>
+          </div>
+        </div>
+        <div class="wordmark" aria-hidden="true">VNV&nbsp;Pro</div>
+        <div class="foot-legal">
+          <span>© 2026 VNV Pro. All rights reserved.</span>
+          <span>Real-time AI transformation</span>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Access-code retrieval (recovery key) — same flow as before -->
+  <div id="codeModal" class="overlay" style="display:none;">
+    <div class="dialog">
+      <div id="codeStage1">
+        <h3>Your access code</h3>
+        <p>This is your <b style="color:var(--text)">recovery key</b> — save it somewhere safe. You'll need it to reset your password if you ever forget it. Confirm your password to view it.</p>
+        <div id="codeError" class="codeerr" style="display:none;"></div>
+        <div class="field"><label for="codePw">Your password</label><input type="password" id="codePw" placeholder="Your current password" autocomplete="current-password"></div>
+        <button class="btn btn-primary" id="codeShowBtn" onclick="revealCode()">Show my code</button>
+        <button class="btn btn-ghost2" onclick="closeCodeModal()">Close</button>
       </div>
       <div id="codeStage2" style="display:none;">
-        <div class="code-value" id="codeValue">—</div>
-        <button class="btn btn-primary w-full" id="codeCopyBtn" onclick="copyCode()" style="margin-top:12px;">Copy code</button>
+        <h3>Your access code</h3>
+        <p>Keep it safe — you'll need it to reset your password.</p>
+        <div class="codeval" id="codeValue">—</div>
+        <button class="btn btn-primary" id="codeCopyBtn" onclick="copyCode()">Copy code</button>
+        <button class="btn btn-ghost2" onclick="closeCodeModal()">Done</button>
       </div>
-      <button class="btn btn-ghost w-full" onclick="closeCodeModal()" style="margin-top:10px;">Close</button>
     </div>
   </div>
 
   <div id="toast"></div>
 
   <script>
-    // Require login
+    // ── Require login (unchanged) ──
     let session = null;
     try { session = JSON.parse(localStorage.getItem('vnv_session') || 'null'); } catch (_) {}
     if (!session || !session.email) { window.location.href = 'login.html'; }
@@ -156,7 +359,7 @@
       window.location.href = 'login.html';
     }
 
-    // ── access code (recovery key) retrieval ──
+    // ── access code (recovery key) retrieval (unchanged flow) ──
     function openCodeModal() {
       document.getElementById('codeError').style.display = 'none';
       document.getElementById('codeStage1').style.display = 'block';
@@ -164,9 +367,7 @@
       document.getElementById('codePw').value = '';
       document.getElementById('codeModal').style.display = 'flex';
     }
-    function closeCodeModal() {
-      document.getElementById('codeModal').style.display = 'none';
-    }
+    function closeCodeModal() { document.getElementById('codeModal').style.display = 'none'; }
     async function revealCode() {
       const pw = document.getElementById('codePw').value;
       const err = document.getElementById('codeError');
@@ -203,6 +404,21 @@
         setTimeout(() => { btn.textContent = 'Copy code'; }, 1500);
       }).catch(() => {});
     }
+    document.getElementById('codeModal').addEventListener('click', function(e){ if(e.target===this) closeCodeModal(); });
+
+    // ── scroll reveal ──
+    (function(){
+      var els = document.querySelectorAll('.reveal,.stagger');
+      if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return;}
+      document.querySelectorAll('.stagger').forEach(function(g){
+        Array.prototype.forEach.call(g.children,function(c,i){c.style.transitionDelay=(i*55)+'ms'});
+      });
+      var io = new IntersectionObserver(function(en){
+        en.forEach(function(x){ if(x.isIntersecting){ x.target.classList.add('in'); io.unobserve(x.target);} });
+      },{threshold:.12,rootMargin:'0px 0px -8% 0px'});
+      els.forEach(function(e){io.observe(e)});
+      window.addEventListener('load',function(){setTimeout(function(){els.forEach(function(e){e.classList.add('in')})},1400)});
+    })();
   </script>
 </body>
 </html>
