@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VNV Pro — App</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <style>
     body {
@@ -588,6 +591,45 @@
       #codeOverlay > div { padding: 24px 18px; }
       #codeValue { font-size: 20px; }
     }
+  </style>
+
+  <style id="reskin-overrides">
+    /* Editorial re-skin (near-black + lavender) — layered last so it wins */
+    .app-logo{font-family:var(--display);font-weight:600;letter-spacing:-.01em;}
+    .app-logo .logo-icon{background:linear-gradient(150deg,#b9adff,#7d6cf0);color:#0a0a0d;border-radius:9px;}
+    .app-header{background:#08080b;border-bottom:1px solid var(--border);}
+    .coin-chip{background:transparent;border:1px solid var(--border);border-radius:999px;color:var(--text2);}
+    .coin-chip:hover{background:rgba(255,255,255,.03);border-color:var(--border2);color:var(--text);}
+    #coinBalance{color:var(--text);font-weight:600;}
+    .mode-badge.badge-purple{background:rgba(173,161,255,.14);color:var(--accent2);border:1px solid rgba(173,161,255,.3);}
+
+    .mode-selector{background:linear-gradient(180deg,rgba(255,255,255,.015),transparent),var(--bg2);border:1px solid var(--border);border-radius:14px;padding:12px 16px;}
+
+    .voice-panel,.stream-panel{background:linear-gradient(180deg,rgba(255,255,255,.015),transparent),var(--bg2);border:1px solid var(--border);border-radius:18px;}
+    .panel-header{text-transform:uppercase;letter-spacing:.12em;font-size:11px;font-weight:600;color:var(--text2);}
+    .voice-card:hover{background:rgba(255,255,255,.03);border-color:var(--border2);}
+    .voice-card.selected{background:rgba(173,161,255,.10);border-color:var(--accent);}
+    .preview-btn{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text2);border-radius:8px;}
+    .preview-btn:hover{border-color:var(--accent);color:var(--accent2);}
+
+    .stream-area{padding:18px;gap:18px;}
+    .video-box{border-radius:14px;border:1px solid var(--border);}
+    .video-placeholder{background:var(--bg3);border-radius:14px;}
+    .video-placeholder .placeholder-icon{opacity:.7;}
+    .video-label{background:rgba(0,0,0,.6);border:1px solid var(--border);border-radius:7px;font-weight:500;}
+
+    .bottom-bar{background:#08080b;border-top:1px solid var(--border);}
+    .billing-counter{background:rgba(173,161,255,.14);border:1px solid rgba(173,161,255,.3);color:var(--accent2);}
+
+    .coin-pkg{background:#0c0c10;border:1px solid var(--border2);border-radius:12px;}
+    .coin-pkg:hover,.coin-pkg.selected{border-color:var(--accent);background:rgba(173,161,255,.07);}
+    .coin-pkg .pkg-coins{color:var(--accent2);}
+    .coin-pkg .featured-tag{background:var(--accent);color:#0a0a0d;}
+    .network-tabs{background:var(--bg3);}
+    .network-tab.active{background:var(--accent);color:#0a0a0d;}
+
+    /* Hide AI Prompt + Quick Presets from users — kept in the DOM and fully functional */
+    #promptControl,#presetControl{display:none!important;}
   </style>
 </head>
 <body>
