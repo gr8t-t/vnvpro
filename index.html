@@ -414,17 +414,17 @@
         baseN = geo.attributes.normal.array.slice(0);
         count = geo.attributes.position.count;
 
-        mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xdadae8, metalness: 0.35, roughness: 0.3 }));
+        mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x9a9ab0, metalness: 0.55, roughness: 0.32 }));
         scene.add(mesh);
 
         var wire = new THREE.Mesh(new THREE.IcosahedronGeometry(1.44, 1),
           new THREE.MeshBasicMaterial({ color: 0xada1ff, wireframe: true, transparent: true, opacity: 0.09 }));
         scene.add(wire); mesh.userData.wire = wire;
 
-        scene.add(new THREE.AmbientLight(0x3a3a48, 0.9));
-        var key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(3, 4, 5); scene.add(key);
-        var lav = new THREE.PointLight(0xada1ff, 26, 40); lav.position.set(-3.5, 1.5, 2.5); scene.add(lav);
-        var lav2 = new THREE.PointLight(0x7d6cf0, 14, 40); lav2.position.set(2.5, -3, 3); scene.add(lav2);
+        scene.add(new THREE.AmbientLight(0x2b2b38, 0.55));
+        var key = new THREE.DirectionalLight(0xffffff, 0.8); key.position.set(3, 4, 5); scene.add(key);
+        var lav = new THREE.PointLight(0xada1ff, 2.6, 40); lav.position.set(-3.2, 1.4, 2.6); scene.add(lav);
+        var lav2 = new THREE.PointLight(0x7d6cf0, 1.5, 40); lav2.position.set(2.6, -3, 3); scene.add(lav2);
 
         clock = new THREE.Clock();
         started = true;
