@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Usage — VNV Pro</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
   <link rel="stylesheet" href="style.css">
   <style>
     .usage-main { max-width: 1000px; margin: 0 auto; padding: 28px 20px 60px; }
@@ -38,6 +38,14 @@
     .usage-legend span { display:inline-flex; align-items:center; gap:5px; }
     .usage-legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
     .usage-empty { color:var(--text2); font-size:13px; text-align:center; padding:34px; }
+  </style>
+  <style id="reskin-overrides">
+    .usage-hello{font-family:var(--display);font-weight:600;letter-spacing:-.02em;font-size:28px;}
+    .usage-tile{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--bg2);border:1px solid var(--border);border-radius:14px;}
+    .usage-tile .val{font-family:var(--display);font-weight:600;letter-spacing:-.02em;}
+    .usage-card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--bg2);border:1px solid var(--border);border-radius:16px;}
+    .usage-card-title{font-family:var(--display);font-weight:600;}
+    .seg-btn.active{background:var(--accent);color:#0a0a0d;}
   </style>
 </head>
 <body>

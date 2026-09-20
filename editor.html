@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Video Editor — VNV Pro</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
   <link rel="stylesheet" href="style.css">
   <style>
     .ed-main { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
@@ -33,6 +33,13 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .result-box { display: none; }
     .hint { font-size: 11px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+  </style>
+  <style id="reskin-overrides">
+    .ed-title{font-family:var(--display);font-weight:600;letter-spacing:-.02em;}
+    .ed-card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--bg2);border:1px solid var(--border);border-radius:16px;}
+    .ed-label{font-family:var(--display);font-weight:600;}
+    .cost-box{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--bg3);border:1px solid var(--border2);border-radius:14px;}
+    .cost-num{font-family:var(--display);font-weight:600;color:var(--accent2);}
   </style>
 </head>
 <body>

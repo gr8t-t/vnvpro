@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sign Up — VNV Pro</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
   <link rel="stylesheet" href="style.css">
   <style>
     body {
@@ -255,6 +255,17 @@
       .signup-logo a { font-size: 20px; }
       .bank-detail-row .value { font-size: 13px; word-break: break-all; }
     }
+  </style>
+  <style id="reskin-overrides">
+    body{background:radial-gradient(55% 45% at 80% -8%,rgba(139,123,240,.14),transparent 60%),radial-gradient(45% 40% at 8% 0%,rgba(120,110,200,.07),transparent 55%),var(--bg);}
+    .signup-logo a{font-family:var(--display);font-weight:600;letter-spacing:-.01em;}
+    .logo-icon{background:linear-gradient(150deg,#b9adff,#7d6cf0);color:#0a0a0d;border-radius:11px;}
+    .signup-card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent),var(--bg2);border:1px solid var(--border2);border-radius:20px;}
+    .signup-card h1,.access-code-display h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;}
+    .step-dot.active{color:#0a0a0d;}
+    .info-box{background:rgba(173,161,255,.10);border:1px solid rgba(173,161,255,.3);color:var(--accent2);}
+    .payment-tab.active{background:var(--accent);color:#0a0a0d;}
+    .access-code-display .code{color:var(--accent2);}
   </style>
 </head>
 <body>

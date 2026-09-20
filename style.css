@@ -437,3 +437,54 @@ input[type="range"]::-webkit-slider-thumb:hover { background: var(--accent2); }
 
 /* Glow effect */
 .glow { box-shadow: 0 0 24px rgba(173,161,255,0.3); }
+
+/* Shared app header (tool pages: usage, editor, tts, voiceswap; app.html has its own) */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #08080b;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.header-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.app-logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-decoration: none;
+}
+.app-logo .logo-icon {
+  width: 30px;
+  height: 30px;
+  background: linear-gradient(150deg, #b9adff, #7d6cf0);
+  color: #0a0a0d;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+.coin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.coin-chip:hover { border-color: var(--border2); background: rgba(255,255,255,0.03); color: var(--text); }
+.coin-chip #coinBalance { color: var(--text); font-weight: 600; }
+.mode-badge { padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
