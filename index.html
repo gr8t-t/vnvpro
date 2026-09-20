@@ -4,540 +4,387 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VNV Pro — Real-time AI Video & Voice Transform</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237c3aed'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23fff' font-family='Arial' font-weight='bold'>V</text></svg>">
-  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* Navbar */
-    .navbar {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 40px;
-      background: rgba(10,10,15,0.9);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
+    :root{
+      --bg:#060607; --bg-elev:#0b0b0f;
+      --card-top:#151519; --card-bot:#0a0a0d;
+      --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+      --text:#f4f4f6; --text-2:#9a9aa5; --text-3:#616169;
+      --accent:#ada1ff; --accent-2:#8b7bf0; --accent-soft:rgba(150,135,255,.13);
+      --wa:#4ac26b;
+      --maxw:1180px;
+      --sans:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
+      --body:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+      --serif:'Instrument Serif',Georgia,serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:var(--body);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+    ::selection{background:var(--accent-soft);color:#fff}
+    ::-webkit-scrollbar{width:8px;height:8px}
+    ::-webkit-scrollbar-track{background:var(--bg)}
+    ::-webkit-scrollbar-thumb{background:#26262e;border-radius:4px}
+    ::-webkit-scrollbar-thumb:hover{background:var(--accent-2)}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+    .glowfield{position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:radial-gradient(60% 42% at 74% 8%, rgba(139,123,240,.16), transparent 60%),radial-gradient(50% 40% at 12% 0%, rgba(120,110,200,.08), transparent 55%)}
+    .content{position:relative;z-index:1}
+
+    nav{position:sticky;top:0;z-index:50;background:rgba(6,6,7,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+    .nav-in{display:flex;align-items:center;justify-content:space-between;height:64px}
+    .brand{display:flex;align-items:center;gap:11px;font-family:var(--sans);font-weight:600;font-size:16px;letter-spacing:-.01em;color:var(--text)}
+    .brand .mark{width:26px;height:26px;flex:none}
+    .nav-right{display:flex;align-items:center;gap:8px}
+
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:var(--body);font-weight:500;font-size:15px;border-radius:12px;padding:13px 22px;cursor:pointer;border:1px solid transparent;transition:.22s;white-space:nowrap}
+    .btn-sm{padding:8px 15px;font-size:13px;border-radius:10px}
+    .btn-primary{background:var(--text);color:#0a0a0d}
+    .btn-primary:hover{background:#fff;transform:translateY(-2px);box-shadow:0 12px 30px rgba(173,161,255,.18)}
+    .btn-ghost{background:transparent;color:var(--text-2);border-color:transparent}
+    .btn-ghost:hover{color:var(--text);border-color:var(--line);background:rgba(255,255,255,.03)}
+    .btn-outline{background:transparent;color:var(--text);border-color:var(--line-2)}
+    .btn-outline:hover{border-color:var(--accent);color:#fff;transform:translateY(-2px)}
+    .btn .arr{transition:transform .22s}
+    .btn:hover .arr{transform:translate(3px,-3px)}
+
+    header.hero{padding:96px 0 84px;text-align:center;position:relative}
+    .eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-2);border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+    .eyebrow .pip{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+    h1.hero-title{font-family:var(--sans);font-weight:600;letter-spacing:-.035em;line-height:1.02;font-size:clamp(46px,8vw,96px);margin:26px auto 0;text-wrap:balance;max-width:16ch}
+    h1.hero-title em{font-family:var(--serif);font-style:italic;font-weight:400;background:linear-gradient(180deg,#fff,#b9b0ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hero-sub{margin:26px auto 0;max-width:56ch;color:var(--text-2);font-size:18px;line-height:1.65}
+    .hero-cta{margin-top:38px;display:flex;flex-wrap:wrap;gap:14px;justify-content:center}
+
+    .sec{padding:64px 0}
+    .sec-head{text-align:center;max-width:60ch;margin:0 auto 46px}
+    .sec-tag{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+    .sec-h{font-family:var(--sans);font-weight:600;letter-spacing:-.03em;font-size:clamp(30px,4.6vw,50px);line-height:1.05;text-wrap:balance;margin-top:10px}
+    .sec-sub{color:var(--text-2);font-size:16px;margin-top:14px}
+
+    /* modes */
+    .mode-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);border-radius:22px;overflow:hidden}
+    .mcard{position:relative;padding:30px 26px;border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.015),transparent);transition:background .3s;min-height:250px;display:flex;flex-direction:column}
+    .mcard:last-child{border-right:none}
+    .mcard:hover{background:radial-gradient(120% 90% at 50% 0%,rgba(139,123,240,.12),transparent 70%)}
+    .mcard.feature{background:radial-gradient(120% 90% at 50% 0%,rgba(139,123,240,.10),transparent 72%)}
+    .mnum{position:absolute;top:26px;right:26px;font-size:12px;color:var(--text-3);letter-spacing:.08em}
+    .tile{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,var(--card-top),var(--card-bot));border:1px solid var(--line-2);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 22px rgba(0,0,0,.45);color:#d6d6e2;margin-bottom:18px}
+    .tile svg{width:26px;height:26px}
+    .mcard:hover .tile{color:var(--accent)}
+    .mcard h3{font-family:var(--sans);font-weight:600;font-size:19px;margin-bottom:8px}
+    .mcard p{color:var(--text-2);font-size:14px;line-height:1.6;flex:1}
+    .rate{margin-top:16px;align-self:flex-start;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);border:1px solid rgba(173,161,255,.28);border-radius:999px;padding:4px 11px}
+
+    /* steps */
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .step{padding:28px 24px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
+    .snum{font-family:var(--serif);font-style:italic;font-size:40px;line-height:1;color:var(--accent);margin-bottom:14px}
+    .step h3{font-family:var(--sans);font-weight:600;font-size:18px;margin-bottom:8px}
+    .step p{color:var(--text-2);font-size:14px;line-height:1.6}
+
+    /* requirements */
+    .req-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .req-card{border:1px solid var(--line);border-radius:18px;padding:28px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;background:linear-gradient(180deg,rgba(255,255,255,.015),transparent)}
+    .req-logo{width:52px;height:52px;color:var(--accent);margin-bottom:14px}
+    .req-logo svg{width:100%;height:100%}
+    .req-num{font-size:11px;font-weight:600;color:var(--accent);letter-spacing:.14em;margin-bottom:8px}
+    .req-name{font-family:var(--sans);font-size:18px;font-weight:600;margin-bottom:8px}
+    .req-desc{font-size:13.5px;color:var(--text-2);line-height:1.6;margin-bottom:18px;flex:1}
+    .req-dl{width:100%}
+    .req-dl>summary{list-style:none;cursor:pointer;background:var(--text);color:#0a0a0d;font-weight:600;font-size:14px;padding:11px 16px;border-radius:11px;text-align:center;user-select:none;transition:.2s}
+    .req-dl>summary:hover{background:#fff}
+    .req-dl>summary::-webkit-details-marker{display:none}
+    .req-dl[open]>summary{border-radius:11px 11px 0 0}
+    .req-os{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-top:none;border-radius:0 0 11px 11px;overflow:hidden}
+    .req-os a{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;font-size:14px;color:var(--text);background:rgba(255,255,255,.02);transition:background .15s}
+    .req-os a:hover{background:rgba(173,161,255,.1);color:var(--accent)}
+    .req-os svg{width:18px;height:18px}
+    .req-linkbtn{display:block;background:var(--text);color:#0a0a0d;font-weight:600;font-size:14px;padding:11px 16px;border-radius:11px;width:100%;transition:.2s}
+    .req-linkbtn:hover{background:#fff}
+    .req-hint{font-size:12px;color:var(--text-3);margin-top:10px;line-height:1.5}
+
+    /* pricing */
+    .price-wrap{background:var(--bg-elev);border:1px solid var(--line);border-radius:24px;padding:56px 40px;text-align:center;position:relative;overflow:hidden}
+    .price-wrap::before{content:"";position:absolute;inset:0;opacity:.5;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:linear-gradient(180deg,transparent,#000 55%,transparent);mask-image:linear-gradient(180deg,transparent,#000 55%,transparent)}
+    .price-cards{position:relative;display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-top:8px}
+    .price-card{padding:20px 22px;background:#0c0c10;border:1px solid var(--line-2);border-radius:14px;min-width:150px;position:relative}
+    .price-card.pop{border-color:var(--accent);background:rgba(173,161,255,.07)}
+    .price-card .amt{font-family:var(--sans);font-weight:600;font-size:22px;color:var(--text)}
+    .price-card .plan{color:var(--text-2);font-size:12.5px;margin-top:6px}
+    .price-card .pop-tag{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0a0a0d;font-size:10px;padding:2px 9px;border-radius:999px;font-weight:700;white-space:nowrap}
+
+    /* contact */
+    .contact{text-align:center;padding:64px 0}
+    .wa-btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;background:transparent;color:var(--wa);border:1px solid rgba(74,194,107,.4);border-radius:12px;font-size:15px;font-weight:600;transition:.2s}
+    .wa-btn:hover{background:rgba(74,194,107,.1);color:#fff;border-color:var(--wa)}
+
+    /* footer */
+    footer{padding:76px 0 40px;border-top:1px solid var(--line);margin-top:60px}
+    .foot-top{display:flex;flex-wrap:wrap;gap:40px;justify-content:space-between;margin-bottom:36px}
+    .foot-contact{font-size:14px;color:var(--text-2);line-height:1.9}
+    .foot-contact b{color:var(--text);font-weight:600;font-family:var(--sans)}
+    .foot-cols{display:flex;gap:64px;flex-wrap:wrap}
+    .foot-col h4{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--text-3);margin-bottom:14px;font-weight:600}
+    .foot-col a{display:block;font-size:15px;color:var(--text-2);padding:5px 0;transition:color .2s}
+    .foot-col a:hover{color:var(--accent)}
+    .wordmark{font-family:var(--serif);font-style:italic;font-weight:400;font-size:clamp(84px,21vw,280px);line-height:.8;letter-spacing:-.02em;background:linear-gradient(180deg,#2a2a31,#0e0e12 82%);-webkit-background-clip:text;background-clip:text;color:transparent;user-select:none;white-space:nowrap;text-align:center;margin:10px 0 26px}
+    .foot-legal{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;padding-top:26px;border-top:1px solid var(--line);color:var(--text-3);font-size:13px}
+    .foot-legal a{color:var(--text-2)}
+    .foot-legal a:hover{color:var(--accent)}
+
+    @media (prefers-reduced-motion:no-preference){
+      .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+      .reveal.in{opacity:1;transform:none}
+      .stagger>*{opacity:0;transform:translateY(20px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+      .stagger.in>*{opacity:1;transform:none}
     }
 
-    .navbar-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 22px;
-      font-weight: 800;
-      color: var(--text);
-      text-decoration: none;
+    @media(max-width:860px){
+      .mode-grid{grid-template-columns:1fr}
+      .mcard{border-right:none;border-bottom:1px solid var(--line)}
+      .steps,.req-grid{grid-template-columns:1fr}
     }
-
-    .navbar-brand .logo-icon {
-      width: 36px;
-      height: 36px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-    }
-
-    .navbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Hero */
-    .hero {
-      padding: 160px 40px 100px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -60%);
-      width: 800px;
-      height: 800px;
-      background: radial-gradient(circle, rgba(124,58,237,0.12) 0%, transparent 70%);
-      pointer-events: none;
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 16px;
-      background: rgba(124,58,237,0.15);
-      border: 1px solid rgba(124,58,237,0.3);
-      border-radius: 20px;
-      font-size: 13px;
-      color: var(--accent2);
-      margin-bottom: 24px;
-    }
-
-    .hero h1 {
-      font-size: clamp(36px, 6vw, 72px);
-      font-weight: 800;
-      line-height: 1.1;
-      margin-bottom: 20px;
-      letter-spacing: -0.02em;
-    }
-
-    .hero p {
-      font-size: 18px;
-      color: var(--text2);
-      max-width: 560px;
-      margin: 0 auto 36px;
-      line-height: 1.7;
-    }
-
-    .hero-actions {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    /* Modes section */
-    .section {
-      padding: 80px 40px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-
-    .section-title {
-      text-align: center;
-      font-size: 36px;
-      font-weight: 800;
-      margin-bottom: 12px;
-    }
-
-    .section-subtitle {
-      text-align: center;
-      color: var(--text2);
-      font-size: 16px;
-      margin-bottom: 48px;
-    }
-
-    .modes-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 24px;
-    }
-
-    .mode-card {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px 28px;
-      transition: all 0.3s;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .mode-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(124,58,237,0.06) 0%, transparent 60%);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-
-    .mode-card:hover {
-      border-color: var(--accent);
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(124,58,237,0.2);
-    }
-
-    .mode-card:hover::before {
-      opacity: 1;
-    }
-
-    .mode-icon {
-      font-size: 40px;
-      margin-bottom: 16px;
-    }
-
-    .mode-card h3 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-
-    .mode-card p {
-      color: var(--text2);
-      font-size: 15px;
-      line-height: 1.6;
-    }
-
-    .mode-rate {
-      display: none;
-      align-items: center;
-      gap: 4px;
-      margin-top: 16px;
-      padding: 4px 12px;
-      background: rgba(124,58,237,0.15);
-      border-radius: 20px;
-      font-size: 12px;
-      color: var(--accent2);
-      font-weight: 600;
-    }
-
-    /* How it works */
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 24px;
-      position: relative;
-    }
-
-    .step-card {
-      text-align: center;
-      padding: 32px 24px;
-    }
-
-    .step-number {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 800;
-      margin: 0 auto 16px;
-    }
-
-    .step-card h3 {
-      font-size: 18px;
-      font-weight: 700;
-      margin-bottom: 10px;
-    }
-
-    .step-card p {
-      color: var(--text2);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-
-    /* Pricing section */
-    .pricing-section {
-      background: var(--bg2);
-      border-radius: 24px;
-      padding: 60px 40px;
-      text-align: center;
-      border: 1px solid var(--border);
-      margin: 0 40px;
-    }
-
-    .pricing-section h2 {
-      font-size: 32px;
-      font-weight: 800;
-      margin-bottom: 12px;
-    }
-
-    .pricing-section p {
-      color: var(--text2);
-      font-size: 16px;
-      margin-bottom: 36px;
-    }
-
-    .pricing-cards {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
-    .price-chip {
-      padding: 12px 24px;
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      font-size: 14px;
-    }
-
-    .price-chip .coin-amount {
-      font-weight: 700;
-      font-size: 18px;
-      color: var(--accent2);
-    }
-
-    /* Contact section */
-    .contact-section {
-      text-align: center;
-      padding: 60px 40px;
-    }
-
-    .wa-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 28px;
-      background: #25d366;
-      color: #fff;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 600;
-      text-decoration: none;
-      transition: all 0.2s;
-    }
-
-    .wa-btn:hover {
-      background: #20b358;
-      color: #fff;
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(37,211,102,0.3);
-    }
-
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 24px 40px;
-      text-align: center;
-      color: var(--text2);
-      font-size: 14px;
-    }
-
-    footer a {
-      color: var(--accent2);
-    }
-
-    @media (max-width: 768px) {
-      .navbar {
-        padding: 12px 20px;
-      }
-      .hero {
-        padding: 120px 20px 80px;
-      }
-      .section {
-        padding: 60px 20px;
-      }
-      .pricing-section {
-        margin: 0 20px;
-        padding: 40px 24px;
-      }
-    }
-
-    @media (max-width: 420px) {
-      .navbar { padding: 10px 14px; }
-      .navbar-brand { font-size: 18px; }
-      .navbar-actions { gap: 8px; }
+    @media(max-width:560px){
+      header.hero{padding:64px 0 56px}
+      .nav-right .btn-ghost{display:none}
     }
   </style>
 </head>
 <body>
+  <div class="glowfield"></div>
+  <div class="content">
 
-  <!-- Navbar -->
-  <nav class="navbar">
-    <a href="index.html" class="navbar-brand">
-      <div class="logo-icon">✦</div>
-      VNV Pro
-    </a>
-    <div class="navbar-actions">
-      <a href="login.html" class="btn btn-ghost">Login</a>
-      <a href="signup.html" class="btn btn-primary">Sign Up</a>
-    </div>
-  </nav>
-
-  <!-- Hero -->
-  <section class="hero">
-    <div class="hero-badge">
-      <span>✦</span>
-      Powered by Decart AI &amp; RVC
-    </div>
-    <h1>Real-time AI<br><span class="gradient-text">Video &amp; Voice</span><br>Transform</h1>
-    <p>Transform your video and voice simultaneously in real-time with AI. Become anyone, sound like anyone — instantly.</p>
-    <div class="hero-actions">
-      <a href="signup.html" class="btn btn-primary btn-lg">Get Started Free</a>
-      <a href="login.html" class="btn btn-secondary btn-lg">Login to App</a>
-    </div>
-  </section>
-
-  <!-- Modes -->
-  <section class="section">
-    <div class="section-title">Choose Your Mode</div>
-    <div class="section-subtitle">Three powerful transformation modes — use what you need, pay only for what you use.</div>
-    <div class="modes-grid">
-      <div class="mode-card">
-        <div class="mode-icon">🎥</div>
-        <h3>Video Only</h3>
-        <p>Transform your face with AI in real-time. Use Decart AI to generate a live video avatar from your webcam stream.</p>
-        <div class="mode-rate">2 coins/sec</div>
-      </div>
-      <div class="mode-card" style="border-color: rgba(168,85,247,0.4);">
-        <div class="mode-icon">✨</div>
-        <h3>Video + Voice</h3>
-        <p>Full transformation — face and voice combined. Get both your video avatar and voice conversion running simultaneously.</p>
-        <div class="mode-rate">2.5 coins/sec</div>
-      </div>
-      <div class="mode-card">
-        <div class="mode-icon">🎙</div>
-        <h3>Voice Only</h3>
-        <p>Change your voice to any character in real-time using RVC voice models. Ultra-low latency audio conversion.</p>
-        <div class="mode-rate">0.5 coins/sec</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- How it works -->
-  <section class="section" style="background: var(--bg2); max-width: 100%; padding: 80px 0;">
-    <div style="max-width: 1100px; margin: 0 auto; padding: 0 40px;">
-      <div class="section-title">How It Works</div>
-      <div class="section-subtitle">Get started in three simple steps</div>
-      <div class="steps-grid">
-        <div class="step-card">
-          <div class="step-number">1</div>
-          <h3>Sign Up</h3>
-          <p>Create your account, complete payment to receive your access code, and get 500 free coins to start.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-number">2</div>
-          <h3>Choose Mode &amp; Voice</h3>
-          <p>Select your transformation mode (Video, Voice, or Both) and pick a voice model from the library.</p>
-        </div>
-        <div class="step-card">
-          <div class="step-number">3</div>
-          <h3>Go Live</h3>
-          <p>Hit Start and go live. Your camera and microphone are transformed in real-time. Stop anytime.</p>
+    <nav>
+      <div class="wrap nav-in">
+        <a class="brand" href="index.html">
+          <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <defs><linearGradient id="lm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b9adff"/><stop offset="1" stop-color="#7d6cf0"/></linearGradient></defs>
+            <path d="M9 8h13a7 7 0 0 1 7 7v3H20a5 5 0 0 0-5 5v9H9z" fill="url(#lm)"/>
+            <path d="M31 22v10h-9a7 7 0 0 1-7-7v-1h11a5 5 0 0 0 5-5z" fill="url(#lm)" opacity=".55"/>
+          </svg>
+          VNV&nbsp;Pro
+        </a>
+        <div class="nav-right">
+          <a href="login.html" class="btn btn-ghost btn-sm">Login</a>
+          <a href="signup.html" class="btn btn-primary btn-sm">Sign Up</a>
         </div>
       </div>
-    </div>
-  </section>
+    </nav>
 
-  <!-- Requirements -->
-  <style>
-    .req-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; max-width:1000px; margin:0 auto; }
-    @media (max-width:820px){ .req-grid{ grid-template-columns:1fr; } }
-    .req-card { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:26px 22px; text-align:center; display:flex; flex-direction:column; align-items:center; }
-    .req-logo { width:56px; height:56px; color:var(--accent2); margin-bottom:14px; }
-    .req-logo svg { width:100%; height:100%; }
-    .req-name { font-size:18px; font-weight:800; margin-bottom:6px; }
-    .req-num { font-size:11px; font-weight:700; color:var(--accent2); letter-spacing:.08em; margin-bottom:10px; }
-    .req-desc { font-size:13px; color:var(--text2); line-height:1.6; margin-bottom:18px; flex:1; }
-    .req-dl { width:100%; }
-    .req-dl > summary { list-style:none; cursor:pointer; background:var(--accent); color:#fff; font-weight:700; font-size:14px; padding:11px 16px; border-radius:10px; text-align:center; user-select:none; }
-    .req-dl > summary::-webkit-details-marker { display:none; }
-    .req-dl[open] > summary { border-radius:10px 10px 0 0; }
-    .req-os { display:flex; flex-direction:column; gap:1px; border:1px solid var(--border); border-top:none; border-radius:0 0 10px 10px; overflow:hidden; }
-    .req-os a { display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; font-size:14px; color:var(--text); text-decoration:none; background:var(--bg2); transition:background .15s; }
-    .req-os a:hover { background:var(--bg3); color:var(--accent2); }
-    .req-os svg { width:18px; height:18px; }
-    .req-linkbtn { display:block; background:var(--accent); color:#fff; font-weight:700; font-size:14px; padding:11px 16px; border-radius:10px; text-decoration:none; width:100%; }
-    .req-linkbtn:hover { filter:brightness(1.08); }
-    .req-hint { font-size:12px; color:var(--text2); margin-top:10px; line-height:1.5; }
-  </style>
-  <section class="section" id="requirements" style="padding: 70px 0;">
-    <div class="section-title">What You Need for Realtime</div>
-    <div class="section-subtitle">Realtime video streams into your calls through OBS over NDI. Install these three free tools once, then you're set.</div>
-    <div class="req-grid">
+    <header class="hero">
+      <div class="wrap">
+        <span class="eyebrow"><span class="pip"></span>Powered by Decart AI &amp; RVC</span>
+        <h1 class="hero-title">Real-time AI video &amp; voice, <em>transformed.</em></h1>
+        <p class="hero-sub">Transform your video and voice simultaneously in real time with AI. Become anyone, sound like anyone — instantly.</p>
+        <div class="hero-cta">
+          <a href="signup.html" class="btn btn-primary">Get Started Free <span class="arr">↗</span></a>
+          <a href="login.html" class="btn btn-outline">Login to App</a>
+        </div>
+      </div>
+    </header>
 
-      <!-- OBS -->
-      <div class="req-card">
-        <div class="req-logo"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="10.5" r="3.2" fill="currentColor"/></svg></div>
-        <div class="req-num">STEP 1</div>
-        <div class="req-name">OBS Studio</div>
-        <div class="req-desc">Sends your transformed video into Zoom, WhatsApp, Meet and more.</div>
-        <details class="req-dl">
-          <summary>Download ▾</summary>
-          <div class="req-os">
-            <a href="https://cdn-fastly.obsproject.com/downloads/OBS-Studio-32.1.2-Windows-x64-Installer.exe">
-              <svg viewBox="0 0 24 24"><path d="M3 5.5 10.5 4v7.3H3zM11.5 3.85 21 2.5v8.8h-9.5zM3 12.7h7.5V20L3 18.5zM11.5 12.7H21v8.8l-9.5-1.35z" fill="currentColor"/></svg> Windows
-            </a>
-            <a href="https://cdn-fastly.obsproject.com/downloads/obs-studio-32.1.2-macos-intel.dmg">
-              <svg viewBox="0 0 24 24"><path d="M16.5 12.4c0-2 1.6-3 1.7-3.1-.9-1.4-2.4-1.5-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.5 2 1 0 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.2s-2.3-.9-2.3-3.1zM14.6 5.9c.6-.7 1-1.7.9-2.6-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.5.9.1 1.9-.5 2.5-1.2z" fill="currentColor"/></svg> macOS
-            </a>
+    <!-- Modes -->
+    <section class="sec">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <div class="sec-tag">/ Modes</div>
+          <h2 class="sec-h">Choose your mode</h2>
+          <p class="sec-sub">Three transformation modes — use what you need, pay only for what you use.</p>
+        </div>
+        <div class="mode-grid stagger">
+          <div class="mcard">
+            <span class="mnum">/01</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.5-2.5v9L15 14M4 6h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/></svg></div>
+            <h3>Video Only</h3>
+            <p>Transform your face with AI in real time. Decart AI generates a live video avatar from your webcam stream.</p>
+            <span class="rate">2 coins/sec</span>
           </div>
-        </details>
-      </div>
-
-      <!-- NDI Tools -->
-      <div class="req-card">
-        <div class="req-logo"><svg viewBox="0 0 48 48"><rect x="4" y="12" width="40" height="24" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><text x="24" y="29" font-family="Arial,sans-serif" font-size="12" font-weight="800" fill="currentColor" text-anchor="middle">NDI</text></svg></div>
-        <div class="req-num">STEP 2</div>
-        <div class="req-name">NDI Tools</div>
-        <div class="req-desc">Carries the video from your browser into OBS over your network.</div>
-        <details class="req-dl">
-          <summary>Download ▾</summary>
-          <div class="req-os">
-            <a href="https://downloads.ndi.tv/Tools/NDI%206%20Tools.exe">
-              <svg viewBox="0 0 24 24"><path d="M3 5.5 10.5 4v7.3H3zM11.5 3.85 21 2.5v8.8h-9.5zM3 12.7h7.5V20L3 18.5zM11.5 12.7H21v8.8l-9.5-1.35z" fill="currentColor"/></svg> Windows
-            </a>
-            <a href="https://downloads.ndi.tv/Tools/NDIToolsInstaller.pkg">
-              <svg viewBox="0 0 24 24"><path d="M16.5 12.4c0-2 1.6-3 1.7-3.1-.9-1.4-2.4-1.5-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.5 2 1 0 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.2s-2.3-.9-2.3-3.1zM14.6 5.9c.6-.7 1-1.7.9-2.6-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.5.9.1 1.9-.5 2.5-1.2z" fill="currentColor"/></svg> macOS
-            </a>
+          <div class="mcard feature">
+            <span class="mnum">/02</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15l-1.9-4.1L5.5 9l4.6-1.4z"/><path d="M18 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div>
+            <h3>Video + Voice</h3>
+            <p>Full transformation — face and voice combined. Your video avatar and voice conversion run simultaneously.</p>
+            <span class="rate">2.5 coins/sec</span>
           </div>
-        </details>
-      </div>
-
-      <!-- NDI Runtime -->
-      <div class="req-card">
-        <div class="req-logo"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><path d="M17 15l14 9-14 9z" fill="currentColor"/></svg></div>
-        <div class="req-num">STEP 3</div>
-        <div class="req-name">NDI Runtime</div>
-        <div class="req-desc">The background component OBS needs to receive NDI. From the DistroAV project.</div>
-        <a class="req-linkbtn" href="https://github.com/DistroAV/DistroAV/releases" target="_blank" rel="noopener">Open GitHub Releases →</a>
-        <div class="req-hint">On that page, scroll down to <strong>Assets</strong> and download the latest version that matches your computer.</div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- Pricing -->
-  <section style="padding: 80px 0;">
-    <div class="pricing-section">
-      <h2>Coin-Based Pricing</h2>
-      <p>Pay only for what you use — no subscriptions, no monthly fees. Buy coins and spend them whenever you stream.</p>
-      <div class="pricing-cards">
-        <div class="price-chip">
-          <div class="coin-amount">720 coins</div>
-          <div style="color: var(--text2); font-size: 12px; margin-top: 4px;">Starter — ₦16,000 / $10</div>
-        </div>
-        <div class="price-chip" style="border-color: rgba(124,58,237,0.4); background: rgba(124,58,237,0.08);">
-          <div class="coin-amount">1,680 coins</div>
-          <div style="color: var(--text2); font-size: 12px; margin-top: 4px;">Standard — ₦32,000 / $20</div>
-        </div>
-        <div class="price-chip" style="border-color: rgba(168,85,247,0.5); background: rgba(168,85,247,0.1); position: relative;">
-          <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 700; white-space: nowrap;">MOST POPULAR</div>
-          <div class="coin-amount">4,560 coins</div>
-          <div style="color: var(--text2); font-size: 12px; margin-top: 4px;">Pro — ₦88,000 / $55</div>
-        </div>
-        <div class="price-chip">
-          <div class="coin-amount">8,400 coins</div>
-          <div style="color: var(--text2); font-size: 12px; margin-top: 4px;">Elite — ₦160,000 / $100</div>
+          <div class="mcard">
+            <span class="mnum">/03</span>
+            <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/></svg></div>
+            <h3>Voice Only</h3>
+            <p>Change your voice to any character in real time using RVC voice models. Ultra-low latency audio conversion.</p>
+            <span class="rate">0.5 coins/sec</span>
+          </div>
         </div>
       </div>
-      <div style="margin-top: 32px;">
-        <a href="signup.html" class="btn btn-primary btn-lg">Get Started</a>
+    </section>
+
+    <!-- How it works -->
+    <section class="sec">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <div class="sec-tag">/ How it works</div>
+          <h2 class="sec-h">Live in three steps</h2>
+        </div>
+        <div class="steps stagger">
+          <div class="step">
+            <div class="snum">01</div>
+            <h3>Sign Up</h3>
+            <p>Create your account, complete payment to receive your access code, and get 500 free coins to start.</p>
+          </div>
+          <div class="step">
+            <div class="snum">02</div>
+            <h3>Choose Mode &amp; Voice</h3>
+            <p>Select your transformation mode (Video, Voice, or Both) and pick a voice model from the library.</p>
+          </div>
+          <div class="step">
+            <div class="snum">03</div>
+            <h3>Go Live</h3>
+            <p>Hit Start and go live. Your camera and microphone are transformed in real time. Stop anytime.</p>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Contact -->
-  <section class="contact-section">
-    <h2 style="font-size: 28px; font-weight: 700; margin-bottom: 12px;">Need Help?</h2>
-    <p style="color: var(--text2); margin-bottom: 24px;">Our support team is available via WhatsApp. We're here to help you get set up.</p>
-    <a href="https://wa.me/18024402677?text=Hi, I need help with VNV Pro" target="_blank" class="wa-btn">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-      Customer Support
-    </a>
-  </section>
+    <!-- Requirements -->
+    <section class="sec" id="requirements">
+      <div class="wrap">
+        <div class="sec-head reveal">
+          <div class="sec-tag">/ Setup</div>
+          <h2 class="sec-h">What you need for Realtime</h2>
+          <p class="sec-sub">Realtime video streams into your calls through OBS over NDI. Install these three free tools once, then you're set.</p>
+        </div>
+        <div class="req-grid stagger">
 
-  <!-- Footer -->
-  <footer>
-    <p>© 2025 VNV Pro. All rights reserved. &nbsp;|&nbsp; <a href="https://wa.me/18024402677?text=Hi, I need help with VNV Pro" target="_blank">Support</a></p>
-  </footer>
+          <div class="req-card">
+            <div class="req-logo"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="10.5" r="3.2" fill="currentColor"/></svg></div>
+            <div class="req-num">STEP 1</div>
+            <div class="req-name">OBS Studio</div>
+            <div class="req-desc">Sends your transformed video into Zoom, WhatsApp, Meet and more.</div>
+            <details class="req-dl">
+              <summary>Download ▾</summary>
+              <div class="req-os">
+                <a href="https://cdn-fastly.obsproject.com/downloads/OBS-Studio-32.1.2-Windows-x64-Installer.exe">
+                  <svg viewBox="0 0 24 24"><path d="M3 5.5 10.5 4v7.3H3zM11.5 3.85 21 2.5v8.8h-9.5zM3 12.7h7.5V20L3 18.5zM11.5 12.7H21v8.8l-9.5-1.35z" fill="currentColor"/></svg> Windows
+                </a>
+                <a href="https://cdn-fastly.obsproject.com/downloads/obs-studio-32.1.2-macos-intel.dmg">
+                  <svg viewBox="0 0 24 24"><path d="M16.5 12.4c0-2 1.6-3 1.7-3.1-.9-1.4-2.4-1.5-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.5 2 1 0 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.2s-2.3-.9-2.3-3.1zM14.6 5.9c.6-.7 1-1.7.9-2.6-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.5.9.1 1.9-.5 2.5-1.2z" fill="currentColor"/></svg> macOS
+                </a>
+              </div>
+            </details>
+          </div>
 
-  <div id="toast"></div>
+          <div class="req-card">
+            <div class="req-logo"><svg viewBox="0 0 48 48"><rect x="4" y="12" width="40" height="24" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><text x="24" y="29" font-family="Arial,sans-serif" font-size="12" font-weight="800" fill="currentColor" text-anchor="middle">NDI</text></svg></div>
+            <div class="req-num">STEP 2</div>
+            <div class="req-name">NDI Tools</div>
+            <div class="req-desc">Carries the video from your browser into OBS over your network.</div>
+            <details class="req-dl">
+              <summary>Download ▾</summary>
+              <div class="req-os">
+                <a href="https://downloads.ndi.tv/Tools/NDI%206%20Tools.exe">
+                  <svg viewBox="0 0 24 24"><path d="M3 5.5 10.5 4v7.3H3zM11.5 3.85 21 2.5v8.8h-9.5zM3 12.7h7.5V20L3 18.5zM11.5 12.7H21v8.8l-9.5-1.35z" fill="currentColor"/></svg> Windows
+                </a>
+                <a href="https://downloads.ndi.tv/Tools/NDIToolsInstaller.pkg">
+                  <svg viewBox="0 0 24 24"><path d="M16.5 12.4c0-2 1.6-3 1.7-3.1-.9-1.4-2.4-1.5-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.3 2-1.4 2.4-.4 6 1 8 .7 1 1.4 2 2.5 2 1 0 1.4-.6 2.6-.6 1.2 0 1.5.6 2.6.6 1.1 0 1.8-1 2.5-2 .8-1.1 1.1-2.2 1.1-2.2s-2.3-.9-2.3-3.1zM14.6 5.9c.6-.7 1-1.7.9-2.6-.9 0-1.9.6-2.5 1.3-.5.6-1 1.6-.9 2.5.9.1 1.9-.5 2.5-1.2z" fill="currentColor"/></svg> macOS
+                </a>
+              </div>
+            </details>
+          </div>
 
+          <div class="req-card">
+            <div class="req-logo"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="3"/><path d="M17 15l14 9-14 9z" fill="currentColor"/></svg></div>
+            <div class="req-num">STEP 3</div>
+            <div class="req-name">NDI Runtime</div>
+            <div class="req-desc">The background component OBS needs to receive NDI. From the DistroAV project.</div>
+            <a class="req-linkbtn" href="https://github.com/DistroAV/DistroAV/releases" target="_blank" rel="noopener">Open GitHub Releases →</a>
+            <div class="req-hint">On that page, scroll down to <strong>Assets</strong> and download the latest version that matches your computer.</div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="sec">
+      <div class="wrap">
+        <div class="price-wrap reveal">
+          <div class="sec-tag" style="position:relative">/ Pricing</div>
+          <h2 class="sec-h" style="margin-top:10px">Coin-based pricing</h2>
+          <p class="sec-sub" style="max-width:52ch;margin:14px auto 0">Pay only for what you use — no subscriptions, no monthly fees. Buy coins and spend them whenever you stream.</p>
+          <div class="price-cards">
+            <div class="price-card"><div class="amt">720</div><div class="plan">Starter — ₦16,000 / $10</div></div>
+            <div class="price-card"><div class="amt">1,680</div><div class="plan">Standard — ₦32,000 / $20</div></div>
+            <div class="price-card pop"><span class="pop-tag">MOST POPULAR</span><div class="amt">4,560</div><div class="plan">Pro — ₦88,000 / $55</div></div>
+            <div class="price-card"><div class="amt">8,400</div><div class="plan">Elite — ₦160,000 / $100</div></div>
+          </div>
+          <div style="position:relative;margin-top:34px">
+            <a href="signup.html" class="btn btn-primary">Get Started <span class="arr">↗</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <section class="contact">
+      <div class="wrap">
+        <div class="reveal">
+          <h2 class="sec-h" style="font-size:clamp(26px,4vw,40px)">Need help?</h2>
+          <p class="sec-sub" style="margin-bottom:26px">Our support team is available via WhatsApp — we're here to help you get set up.</p>
+          <a href="https://wa.me/18024402677?text=Hi, I need help with VNV Pro" target="_blank" class="wa-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+            Customer Support
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot-top reveal">
+          <div class="foot-contact">
+            <b>VNV&nbsp;Pro</b><br>
+            Real-time AI video &amp; voice<br>
+            Powered by Decart AI &amp; RVC
+          </div>
+          <div class="foot-cols">
+            <div class="foot-col">
+              <h4>Product</h4>
+              <a href="signup.html">Sign Up</a>
+              <a href="login.html">Login</a>
+              <a href="#requirements">Setup Requirements</a>
+            </div>
+            <div class="foot-col">
+              <h4>Support</h4>
+              <a href="https://wa.me/18024402677?text=Hi, I need help with VNV Pro" target="_blank" rel="noopener">WhatsApp Support</a>
+            </div>
+          </div>
+        </div>
+        <div class="wordmark" aria-hidden="true">VNV&nbsp;Pro</div>
+        <div class="foot-legal">
+          <span>© 2026 VNV Pro. All rights reserved.</span>
+          <a href="https://wa.me/18024402677?text=Hi, I need help with VNV Pro" target="_blank" rel="noopener">Support</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    (function(){
+      var els = document.querySelectorAll('.reveal,.stagger');
+      if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('in')});return;}
+      document.querySelectorAll('.stagger').forEach(function(g){
+        Array.prototype.forEach.call(g.children,function(c,i){c.style.transitionDelay=(i*60)+'ms'});
+      });
+      var io = new IntersectionObserver(function(en){
+        en.forEach(function(x){ if(x.isIntersecting){ x.target.classList.add('in'); io.unobserve(x.target);} });
+      },{threshold:.12,rootMargin:'0px 0px -8% 0px'});
+      els.forEach(function(e){io.observe(e)});
+      window.addEventListener('load',function(){setTimeout(function(){els.forEach(function(e){e.classList.add('in')})},1400)});
+    })();
+  </script>
 </body>
 </html>
