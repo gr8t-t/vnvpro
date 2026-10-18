@@ -768,7 +768,6 @@
                 <span class="placeholder-icon">✨</span>
                 <span>AI Output</span>
               </div>
-              <canvas id="outputCanvas" style="display:none; width:100%; height:100%; object-fit:cover;"></canvas>
               <video id="outputVideo" autoplay playsinline style="display:none; width:100%; height:100%; object-fit:cover;"></video>
               <span class="video-label">AI Output</span>
               <button type="button" id="popoutBtn" title="Open AI output fullscreen in a new tab"
@@ -807,17 +806,6 @@
 
           <!-- Controls -->
           <div class="controls-panel">
-            <!-- Video sync delay (video+voice mode only) -->
-            <div class="control-group" id="delayControl" style="display:none;">
-              <label class="control-label" id="delayLabel">Video Delay: 0ms</label>
-              <input type="range" id="delaySlider" min="0" max="6000" value="0" step="50">
-              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text2); margin-top:2px;">
-                <span>No delay</span>
-                <span>Drag right if audio lags behind</span>
-                <span>6000ms</span>
-              </div>
-            </div>
-
             <!-- Presets (video modes) -->
             <div class="control-group" id="presetControl" style="flex-basis:100%;">
               <label class="control-label">Quick Presets</label>

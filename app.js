@@ -5,11 +5,7 @@ let mode = 'video';
 let engine = 'v1';                 // 'v1' (Standard) | 'v2' (Premium)
 let v2Pitch = 0;                   // Voice 2.0 pitch shift (semitones), user-adjustable slider
 let selectedVoice = null;
-let videoDelayMs = 0;              // ms to buffer video output (delays video to match slow audio)
 let videoModelId = 'lucy-2.5';     // Decart realtime model: 'lucy-2.5' (new, 1280x720) | 'lucy-2.1' (older)
-let frameBuffer = [];              // { time: DOMHighResTimeStamp, bmp: ImageBitmap }
-let captureIntervalId = null;      // setInterval handle for frame capture
-let delayRafId = null;             // requestAnimationFrame handle for delayed render
 let rvcWs = null;
 let v2HeartbeatInterval = null;
 let v1HeartbeatInterval = null;
@@ -149,11 +145,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Start key load in background for video modes
   keyLoadPromise = fetchApiKey(currentEmail);
-
-  // Set up video sync delay slider
-  document.getElementById('delaySlider').addEventListener('input', (e) => {
-    setVideoDelay(parseInt(e.target.value));
-  });
 
   // Set up Voice 2.0 pitch sliders — left panel (video+voice) and centered (voice-only).
   // Both drive the same v2Pitch and stay in sync.
@@ -790,7 +781,6 @@ function setMode(m) {
   // Show/hide stream areas
   const videoArea = document.getElementById('videoStreamArea');
   const audioDisplay = document.getElementById('audioDisplay');
-  const delayControl = document.getElementById('delayControl');
   const promptControl = document.getElementById('promptControl');
   const enhanceControl = document.getElementById('enhanceControl');
   const applyControl = document.getElementById('applyControl');
@@ -811,21 +801,18 @@ function setMode(m) {
   if (m === 'audio') {
     videoArea.style.display = 'none';
     audioDisplay.style.display = 'block';
-    delayControl.style.display = 'none';   // no video to sync against in audio-only mode
     videoControls(false);
     voicePanel.style.display = '';
     appColumns.classList.remove('single-col');
   } else if (m === 'both') {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
-    delayControl.style.display = 'block';  // sync slider only meaningful when both are active
     videoControls(true);
     voicePanel.style.display = '';
     appColumns.classList.remove('single-col');
   } else {
     videoArea.style.display = '';
     audioDisplay.style.display = 'none';
-    delayControl.style.display = 'none';
     videoControls(true);
     voicePanel.style.display = 'none';
     appColumns.classList.add('single-col');
@@ -927,9 +914,6 @@ function stopStream() {
   updateVoiceMatchVisibility();
   stopSetupWatermark();
 
-  // Stop video delay buffering
-  stopVideoDelay();
-
   // Release the voice engine slot / stop the active-stream count
   stopEngineHeartbeat();
 
@@ -1001,95 +985,6 @@ function setStatus(text, live) {
   }
 }
 
-// ─── VIDEO SYNC DELAY ─────────────────────────────────────────────────────────
-// Buffers Decart output frames as ImageBitmaps and renders the frame from
-// videoDelayMs ago, so slow audio (RVC) lines up with the mouth on screen.
-
-// Hard ceiling on buffered frames (backstop vs. runaway GPU memory). At the
-// 6000ms max + 400ms headroom and ~30fps capture, normal use stays ~192 frames;
-// 240 gives margin without ever interfering with the time-based eviction.
-const MAX_DELAY_FRAMES = 240;
-
-function setVideoDelay(ms) {
-  videoDelayMs = ms;
-  const label = document.getElementById('delayLabel');
-  if (label) label.textContent = `Video Delay: ${ms}ms`;
-  if (!isStreaming) return;
-  const outputVideo = document.getElementById('outputVideo');
-  if (!outputVideo.srcObject) return;   // video not started yet
-  if (ms > 0) {
-    outputVideo.style.display = 'none';
-    startVideoDelay();
-  } else {
-    stopVideoDelay();
-    outputVideo.style.display = 'block';
-  }
-}
-
-function startVideoDelay() {
-  stopVideoDelay();   // clear any previous run
-  const outputVideo = document.getElementById('outputVideo');
-  const outputCanvas = document.getElementById('outputCanvas');
-  const ctx = outputCanvas.getContext('2d');
-
-  // Size canvas to match the video's intrinsic resolution (or a safe default)
-  function syncSize() {
-    if (outputVideo.videoWidth > 0) {
-      outputCanvas.width  = outputVideo.videoWidth;
-      outputCanvas.height = outputVideo.videoHeight;
-    } else {
-      outputCanvas.width  = 1280;
-      outputCanvas.height = 720;
-    }
-  }
-  syncSize();
-  outputVideo.addEventListener('loadedmetadata', syncSize, { once: true });
-  outputCanvas.style.display = 'block';
-
-  // Capture a frame every ~33ms (≈30fps)
-  captureIntervalId = setInterval(async () => {
-    if (!isStreaming || outputVideo.readyState < 2) return;
-    try {
-      const bmp = await createImageBitmap(outputVideo);
-      frameBuffer.push({ time: performance.now(), bmp });
-      // Evict frames older than delay + 400ms headroom, freeing GPU memory
-      const cutoff = performance.now() - videoDelayMs - 400;
-      while (frameBuffer.length > 1 && frameBuffer[0].time < cutoff) {
-        frameBuffer[0].bmp.close();
-        frameBuffer.shift();
-      }
-      // Safety cap: never hold more than MAX_DELAY_FRAMES (backstop vs. runaway memory)
-      while (frameBuffer.length > MAX_DELAY_FRAMES) {
-        frameBuffer[0].bmp.close();
-        frameBuffer.shift();
-      }
-    } catch (_) {}
-  }, 33);
-
-  // Render loop — draws the frame closest to videoDelayMs in the past
-  function render() {
-    if (!isStreaming) return;
-    const target = performance.now() - videoDelayMs;
-    let best = null;
-    for (const f of frameBuffer) {
-      if (f.time <= target) best = f;
-      else break;
-    }
-    if (best) ctx.drawImage(best.bmp, 0, 0, outputCanvas.width, outputCanvas.height);
-    delayRafId = requestAnimationFrame(render);
-  }
-  delayRafId = requestAnimationFrame(render);
-}
-
-function stopVideoDelay() {
-  if (captureIntervalId) { clearInterval(captureIntervalId); captureIntervalId = null; }
-  if (delayRafId)        { cancelAnimationFrame(delayRafId);  delayRafId = null; }
-  frameBuffer.forEach(f => { try { f.bmp.close(); } catch (_) {} });
-  frameBuffer = [];
-  const outputCanvas = document.getElementById('outputCanvas');
-  if (outputCanvas) outputCanvas.style.display = 'none';
-}
-
 // ─── VIDEO STREAM ──────────────────────────────────────────────────────────────
 async function startVideoStream() {
   // Ensure API key is loaded
@@ -1132,13 +1027,7 @@ async function startVideoStream() {
       outputVideo.srcObject = transformedStream;
       document.getElementById('outputPlaceholder').style.display = 'none';
       window.aiOutputStream = transformedStream;
-      // Start video delay buffering if slider is non-zero; otherwise show live
-      if (videoDelayMs > 0) {
-        outputVideo.style.display = 'none';
-        startVideoDelay();
-      } else {
-        outputVideo.style.display = 'block';
-      }
+      outputVideo.style.display = 'block';
     },
   });
 
@@ -1181,7 +1070,6 @@ function stopVideoStream() {
   document.getElementById('inputPlaceholder').style.display = 'flex';
   const outputVideo = document.getElementById('outputVideo');
   if (outputVideo) { outputVideo.srcObject = null; outputVideo.style.display = 'none'; }
-  document.getElementById('outputCanvas').style.display = 'none';
   document.getElementById('outputPlaceholder').style.display = 'flex';
   window.aiOutputStream = null;
   settingsApplied = false;
@@ -1263,7 +1151,6 @@ async function startSetupVideo() {
   setupCanvasStream = canvas.captureStream(15);
   outputVideo.srcObject = setupCanvasStream;
   outputVideo.style.display = 'block';
-  document.getElementById('outputCanvas').style.display = 'none';
   document.getElementById('outputPlaceholder').style.display = 'none';
   window.aiOutputStream = setupCanvasStream;   // identical surface to live Decart → OBS unchanged
 }
