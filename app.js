@@ -174,6 +174,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (_) {}
   const modelSel = document.getElementById('modelSelect');
   if (modelSel) modelSel.value = videoModelId;
+  applyModelEnhanceDefault(); // Enhance off for 2.5 (anti-bloom), on for 2.1
 
   // Apply the default mode layout (Video Only) on load
   setMode('video');
@@ -750,6 +751,19 @@ function playPreview(e, id) {
 function setVideoModel(v) {
   videoModelId = (v === 'lucy-2.1') ? 'lucy-2.1' : 'lucy-2.5';
   try { localStorage.setItem('vnv_video_model', videoModelId); } catch (_) {}
+  applyModelEnhanceDefault();
+}
+
+// Lucy 2.5 renders at a higher resolution, and the Enhance pass on that output
+// tends to add a bright white "bloom"/haze (the blurry white light) that 2.1
+// doesn't show. So Enhance defaults OFF when 2.5 is selected and ON for 2.1.
+// It stays a normal toggle — the user can turn it back on for 2.5 if they want.
+function applyModelEnhanceDefault() {
+  const t = document.getElementById('enhanceToggle');
+  if (!t) return;
+  t.checked = (videoModelId === 'lucy-2.1');
+  const lbl = t.parentElement && t.parentElement.nextElementSibling;
+  if (lbl) lbl.textContent = t.checked ? 'On' : 'Off';
 }
 
 function setMode(m) {
@@ -2148,6 +2162,70 @@ async function submitBankTopup() {
     }
   } catch (_) {
     showToast('Network error. Please try again.', 'error');
+  }
+}
+
+// ── Receipt upload ─────────────────────────────────────────────────────────────
+// The user just picks an image of their transfer receipt. We downscale it in the
+// browser (keeps the upload small and the stored copy tiny) and send it off for
+// automatic verification — they never see the checks, only the result.
+async function downscaleImage(file, maxDim, quality) {
+  const dataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result); r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i); i.onerror = rej;
+    i.src = dataUrl;
+  });
+  let w = img.width, h = img.height;
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  w = Math.round(w * scale); h = Math.round(h * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+async function handleReceiptFile(file) {
+  if (!file) return;
+  if (!selectedPkgId) { showToast('Please select a package first.', 'error'); return; }
+  if (!file.type || !file.type.startsWith('image/')) { showToast('Please upload an image of your receipt.', 'error'); return; }
+
+  const btn = document.getElementById('receiptUploadBtn');
+  const status = document.getElementById('receiptStatus');
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+  if (status) { status.style.color = 'var(--text2)'; status.textContent = 'Reading your receipt…'; }
+
+  try {
+    const imageBase64 = await downscaleImage(file, 1280, 0.8);
+    const res = await fetch('/api/coins', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'receipt_verify', email: currentEmail, packageId: selectedPkgId, imageBase64 })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok && data.approved) {
+      await loadBalance();
+      if (status) { status.style.color = 'var(--accent2)'; status.textContent = (data.coins || 0).toLocaleString() + ' coins added to your account.'; }
+      showToast('Success! ' + (data.coins || 0).toLocaleString() + ' coins added.', 'success');
+      setTimeout(closeBuyCoins, 1500);
+    } else if (res.ok && data.ok) {
+      if (status) { status.style.color = 'var(--text2)'; status.textContent = "Receipt received. We'll confirm your payment and add your coins shortly."; }
+      showToast("Receipt received — we'll confirm shortly.", 'success');
+      setTimeout(closeBuyCoins, 2200);
+    } else {
+      if (status) { status.style.color = 'var(--danger, #e5484d)'; status.textContent = data.error || 'Could not process that receipt. Please try again.'; }
+      showToast(data.error || 'Could not process receipt.', 'error');
+    }
+  } catch (_) {
+    if (status) { status.style.color = 'var(--danger, #e5484d)'; status.textContent = 'Network error. Please try again.'; }
+    showToast('Network error. Please try again.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+    const fi = document.getElementById('receiptFile'); if (fi) fi.value = '';
   }
 }
 

@@ -978,15 +978,13 @@
 
       <div class="network-pane" id="nbank">
         <div id="bankInfoDisplay" style="margin-bottom:12px;font-size:13px;color:var(--text2);">Loading bank details...</div>
-        <div class="form-group">
-          <label class="form-label">Your Name</label>
-          <input type="text" class="form-input" id="buyBankName" placeholder="Your full name">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Transfer Reference</label>
-          <input type="text" class="form-input" id="buyBankRef" placeholder="e.g. VNV Pro coins">
-        </div>
-        <button class="btn btn-primary w-full" onclick="submitBankTopup()">Submit Bank Transfer</button>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5;">
+          Transfer to the account above, then upload your payment receipt. Smaller
+          packages are confirmed instantly; larger ones are confirmed shortly after.
+        </p>
+        <input type="file" id="receiptFile" accept="image/*" style="display:none" onchange="handleReceiptFile(this.files && this.files[0])">
+        <button class="btn btn-primary w-full" id="receiptUploadBtn" onclick="document.getElementById('receiptFile').click()">Upload Receipt</button>
+        <div id="receiptStatus" style="margin-top:12px;font-size:13px;line-height:1.5;"></div>
       </div>
     </div>
   </div>

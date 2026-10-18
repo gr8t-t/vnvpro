@@ -474,6 +474,40 @@
         </div>
 
         <div class="card" style="margin-bottom:20px;">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:8px;">Receipt Verification</h3>
+          <p style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:14px;">
+            When a user uploads a bank-transfer receipt, it's scanned automatically. A receipt is
+            matched against the <strong>Bank Details above</strong> (the account it must be paid into),
+            so make sure those are correct. Packages at or under the auto-approve cap are credited
+            instantly when every check passes; larger ones always wait for your approval here.
+          </p>
+          <div id="receiptTarget" style="background:var(--bg,#111);border-radius:8px;padding:10px;font-size:12px;color:var(--text2);margin-bottom:14px;"></div>
+          <div class="setting-row">
+            <div><div class="setting-label">Auto-approve cap (₦)</div><div class="setting-sub">Packages at or under this are auto-credited; above waits for you</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="receiptAutoMax" step="1000" min="0" placeholder="32000">
+            </div>
+          </div>
+          <div class="setting-row">
+            <div><div class="setting-label">Receipt date window (days)</div><div class="setting-sub">Receipts older than this are flagged for review</div></div>
+            <div class="setting-input">
+              <input type="number" class="form-input" id="receiptDateWindow" step="1" min="1" placeholder="3">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Full account name for matching (hidden from users)</label>
+            <input type="text" class="form-input" id="receiptVerifyName" placeholder="e.g. your full three-name registered account name">
+            <div class="setting-sub" style="margin-top:4px;">Enter ALL your account names here (what the bank shows on a real receipt). Users only see the Account Name in Bank Details above — if you show them fewer names, a faked receipt missing the hidden name is flagged. Leave blank to just match the Bank Details name.</div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">OCR.space API key</label>
+            <input type="text" class="form-input" id="receiptOcrKey" placeholder="helloworld (free demo)">
+            <div class="setting-sub" style="margin-top:4px;">Free key from ocr.space (25,000 scans/month). The default demo key works for light testing but is shared and rate-limited.</div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveReceiptSettings()">Save Receipt Settings</button>
+        </div>
+
+        <div class="card" style="margin-bottom:20px;">
           <h3 style="font-size:15px;font-weight:700;margin-bottom:16px;">Signup Fee</h3>
           <div class="setting-row">
             <div><div class="setting-label">Signup Fee (USD)</div><div class="setting-sub">One-time fee to activate account</div></div>
@@ -1218,17 +1252,31 @@
       if (topups.length === 0) {
         topupsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:16px;">No pending topups.</td></tr>';
       } else {
-        topupsBody.innerHTML = topups.map(t => `
+        const scanBadge = (ok, label) => `<span style="color:${ok ? 'var(--success,#30a46c)' : 'var(--danger,#e5484d)'};font-size:11px;margin-right:8px;">${label} ${ok ? 'OK' : 'x'}</span>`;
+        topupsBody.innerHTML = topups.map(t => {
+          let payCell;
+          if (t.method === 'receipt') {
+            const c = t.checks || {};
+            const badges = scanBadge(c.amountOk, 'amount') + scanBadge(c.acctNameOk, 'name') + scanBadge(c.acctNumOk, 'number') + scanBadge(c.statusOk, 'status') + scanBadge(!c.dateOld, 'date');
+            payCell = `Receipt — ₦${(t.priceNaira || 0).toLocaleString()}`
+              + `<div style="margin-top:4px;">${badges}</div>`
+              + (t.reason ? `<div style="font-size:11px;color:var(--text2);margin-top:2px;">${escHtml(t.reason)}</div>` : '')
+              + (t.hasReceipt ? `<button class="btn btn-sm" style="margin-top:6px;" onclick="viewReceipt('${t.id}')">View receipt</button>` : '');
+          } else {
+            payCell = `${escHtml(t.network || 'bank')} ${t.txHash ? '(' + escHtml(t.txHash.substring(0,12)) + '...)' : (t.transferRef ? escHtml(t.transferRef) : '')}`;
+          }
+          return `
           <tr>
             <td>${escHtml(t.email)}</td>
             <td>${escHtml(t.packageLabel || t.packageId || '—')}</td>
-            <td>${escHtml(t.network || 'bank')} ${t.txHash ? '(' + escHtml(t.txHash.substring(0,12)) + '...)' : ''}</td>
+            <td>${payCell}</td>
             <td>${formatDate(t.createdAt)}</td>
             <td>
               <button class="btn btn-success btn-sm" onclick="approveTopup('${t.id}')">Approve</button>
               <button class="btn btn-danger btn-sm" onclick="rejectTopup('${t.id}')">Reject</button>
             </td>
-          </tr>`).join('');
+          </tr>`;
+        }).join('');
       }
 
       // Update badge
@@ -1262,6 +1310,25 @@
       const data = await coinsApi({ action: 'reject_topup', topupId: id });
       if (data.ok) { showToast('Topup rejected.', 'success'); loadApprovals(); }
       else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function viewReceipt(id) {
+      const data = await coinsApi({ action: 'get_receipt_image', topupId: id });
+      if (!data || !data.image) { showToast((data && data.error) || 'Receipt not available.', 'error'); return; }
+      let ov = document.getElementById('receiptViewer');
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'receiptViewer';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;cursor:zoom-out;';
+        ov.onclick = () => { ov.style.display = 'none'; };
+        document.body.appendChild(ov);
+      }
+      ov.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = data.image;
+      img.style.cssText = 'max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.6);';
+      ov.appendChild(img);
+      ov.style.display = 'flex';
     }
 
     async function loadBadges() {
@@ -1343,6 +1410,24 @@
       // Custom voice price
       document.getElementById('voicePriceInput').value = voicePriceData.price ?? 20;
       document.getElementById('voicePriceNairaInput').value = voicePriceData.priceNaira ?? 32000;
+
+      // Receipt verification
+      try {
+        const rc = await coinsApi({ action: 'get_receipt_settings' });
+        const s = rc.settings || {};
+        document.getElementById('receiptAutoMax').value = s.autoMaxNaira ?? 32000;
+        document.getElementById('receiptDateWindow').value = s.dateWindowDays ?? 3;
+        document.getElementById('receiptOcrKey').value = s.ocrKey || '';
+        document.getElementById('receiptVerifyName').value = s.verifyName || '';
+        const tgt = rc.target || {};
+        const tgtEl = document.getElementById('receiptTarget');
+        if (tgtEl) {
+          tgtEl.innerHTML = (tgt.accountNumber || tgt.matchName)
+            ? `Receipts must match: <strong>${escHtml(tgt.matchName || '')}</strong> &middot; <strong>${escHtml(tgt.accountNumber || '')}</strong> ${tgt.bankName ? '&middot; ' + escHtml(tgt.bankName) : ''}`
+              + (s.verifyName ? '<div style="margin-top:4px;color:var(--text2);">(matching the hidden full name — users only see &ldquo;' + escHtml(tgt.accountName || '') + '&rdquo;)</div>' : '')
+            : 'No bank account set above yet — set your Bank Details so receipts can be matched, otherwise every receipt will wait for manual approval.';
+        }
+      } catch (_) {}
     }
 
     async function saveVoicePrice() {
@@ -1410,6 +1495,20 @@
         showToast('Bank details cleared.', 'success');
         loadSettings();
       } else showToast(data.error || 'Failed.', 'error');
+    }
+
+    async function saveReceiptSettings() {
+      const data = await coinsApi({
+        action: 'set_receipt_settings',
+        settings: {
+          autoMaxNaira: parseInt(document.getElementById('receiptAutoMax').value) || 32000,
+          dateWindowDays: parseInt(document.getElementById('receiptDateWindow').value) || 3,
+          ocrKey: document.getElementById('receiptOcrKey').value.trim(),
+          verifyName: document.getElementById('receiptVerifyName').value.trim()
+        }
+      });
+      if (data.ok) showToast('Receipt settings saved.', 'success');
+      else showToast(data.error || 'Failed.', 'error');
     }
 
     async function saveSignupFee() {
