@@ -20,7 +20,12 @@ const RECEIPT_SETTINGS_KEY = 'vnv_receipt_settings';
 // receipts — never shown to users. Leave it blank to just use the public account
 // name. Trick: show users only two of your names; put all three here, and a faked
 // receipt that only carries the two public names fails the name check.
-const DEFAULT_RECEIPT_SETTINGS = { ocrKey: 'helloworld', dateWindowDays: 3, autoMaxNaira: 32000, verifyName: '' };
+const DEFAULT_RECEIPT_SETTINGS = { ocrKey: 'helloworld', dateWindowDays: 3, autoMaxNaira: 32000, verifyName: '', supportWhatsApp: '+18024402677' };
+
+// A payment session is opened when a user is shown the account to pay into. It
+// lives 20 minutes (SESSION_TTL) — the receipt must be uploaded before it lapses.
+// Redis TTL IS the expiry: once the key is gone the window has closed.
+const SESSION_TTL = 20 * 60;   // seconds
 
 // edit = Video Editor (async Lucy Edit): Decart bills $0.04/sec of output video
 // (2x the realtime $0.02/sec), so 6 coins/sec keeps the same margin as video@3.
@@ -399,6 +404,39 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ── get_pay_config (public: everything the mobile pay page needs) ────────────
+    if (action === 'get_pay_config') {
+      const [pkgs, bank, settings] = await Promise.all([getPackages(), getBankTarget(), getReceiptSettings()]);
+      return res.status(200).json({
+        packages: pkgs,
+        bank: { accountNumber: bank.accountNumber || '', accountName: bank.accountName || '', bankName: bank.bankName || '' },
+        autoMaxNaira: settings.autoMaxNaira ?? 32000,
+        supportWhatsApp: settings.supportWhatsApp || '+18024402677',
+        paystackEnabled: !!process.env.PAYSTACK_SECRET_KEY,
+      });
+    }
+
+    // ── start_payment_session (public: opens the 20-min window to pay by transfer) ─
+    // Called when the user is shown the account to pay into. The countdown and the
+    // receipt's validity are both tied to this session.
+    if (action === 'start_payment_session') {
+      if (!email) return res.status(400).json({ error: 'Missing email' });
+      const { packageId } = body;
+      if (!packageId) return res.status(400).json({ error: 'Missing packageId' });
+      const pkgs = await getPackages();
+      const pkg = pkgs.find(p => p.id === packageId);
+      if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+      const bank = await getBankTarget();
+      const sessionId = 'psess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+      const startedAt = Date.now();
+      await redis.set('vnv_paysession:' + sessionId,
+        JSON.stringify({ email, packageId, startedAt }), 'EX', SESSION_TTL);
+      return res.status(200).json({
+        ok: true, sessionId, startedAt, ttl: SESSION_TTL,
+        bank: { accountNumber: bank.accountNumber || '', accountName: bank.accountName || '', bankName: bank.bankName || '' },
+      });
+    }
+
     // ── receipt_verify (user uploads a payment receipt; auto-credit or queue) ───
     // The user only ever "uploads an image". Behind the scenes we OCR it and run
     // four silent checks — right amount, paid into OUR account, a success marker,
@@ -417,6 +455,23 @@ export default async function handler(req, res) {
       const pkgs = await getPackages();
       const pkg = pkgs.find(p => p.id === packageId);
       if (!pkg) return res.status(400).json({ error: 'Invalid package' });
+
+      // 20-minute window (the mobile pay page sends a sessionId). If the session
+      // is gone, the window has lapsed → ask them to contact support. Legacy app
+      // uploads send no sessionId and skip this check.
+      const sessionId = body.sessionId || '';
+      let sessionKey = '';
+      if (sessionId) {
+        sessionKey = 'vnv_paysession:' + sessionId;
+        const sraw = await redis.get(sessionKey);
+        if (!sraw) return res.status(400).json({ ok: false, expired: true, error: 'Your 20-minute payment window has expired. Please contact support.' });
+        try {
+          const sess = JSON.parse(sraw);
+          if (sess.email !== email || sess.packageId !== packageId) {
+            return res.status(400).json({ ok: false, error: 'This receipt does not match your payment session.' });
+          }
+        } catch (_) {}
+      }
 
       const settings = await getReceiptSettings();
       const bank = await getBankTarget();
@@ -491,6 +546,7 @@ export default async function handler(req, res) {
           });
           await redis.set(PENDING_TOPUPS_KEY, JSON.stringify(topups));
         } catch (_) {}
+        if (sessionKey) await redis.del(sessionKey);   // consume the 20-min session
         return res.status(200).json({ ok: true, approved: true, coins: pkg.coins, balance: newBal });
       }
 
@@ -517,6 +573,7 @@ export default async function handler(req, res) {
         // keep the image for review for 7 days, then it auto-deletes (frees space)
         await redis.set('vnv_receipt_img:' + topupId, imageBase64, 'EX', 60 * 60 * 24 * 7);
       }
+      if (sessionKey) await redis.del(sessionKey);   // consume the 20-min session
       return res.status(200).json({ ok: true, approved: false, pending: true });
     }
 
@@ -633,6 +690,7 @@ export default async function handler(req, res) {
         dateWindowDays: Math.max(1, parseInt(incoming.dateWindowDays) || existing.dateWindowDays),
         autoMaxNaira: Math.max(0, parseInt(incoming.autoMaxNaira) || existing.autoMaxNaira),
         verifyName: (incoming.verifyName != null ? String(incoming.verifyName).trim() : (existing.verifyName || '')),
+        supportWhatsApp: (incoming.supportWhatsApp != null ? String(incoming.supportWhatsApp).trim() : (existing.supportWhatsApp || '+18024402677')) || '+18024402677',
       };
       await redis.set(RECEIPT_SETTINGS_KEY, JSON.stringify(updated));
       return res.status(200).json({ ok: true, settings: updated });

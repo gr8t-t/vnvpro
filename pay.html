@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <title>Buy Coins — VNV Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23ada1ff'/><text x='16' y='23' font-size='18' text-anchor='middle' fill='%23090910' font-family='Arial' font-weight='bold'>V</text></svg>">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { background: var(--bg); color: var(--text); min-height: 100vh; -webkit-tap-highlight-color: transparent; }
+    .wrap { width: 100%; max-width: 480px; margin: 0 auto; padding: 18px 16px 48px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px; }
+    .brand { display:flex; align-items:center; gap:9px; font-weight:800; font-size:18px; }
+    .brand .logo-icon { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; background:linear-gradient(150deg,#b9adff,#7d6cf0); color:#0a0a0d; font-size:16px; }
+    .balance-chip { font-size:13px; color:var(--text2); background:var(--bg2); border:1px solid var(--border); border-radius:999px; padding:6px 12px; }
+    .balance-chip strong { color:var(--text); }
+    h1 { font-size:22px; font-weight:700; margin-bottom:4px; }
+    .sub { color:var(--text2); font-size:13.5px; margin-bottom:20px; line-height:1.5; }
+    .card { background:var(--bg2); border:1px solid var(--border); border-radius:16px; padding:18px; margin-bottom:16px; }
+    .error-box,.ok-box { border-radius:10px; padding:11px 13px; font-size:13px; margin-bottom:14px; display:none; line-height:1.45; }
+    .error-box { background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:var(--red,#ef4444); }
+    .ok-box { background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.35); color:#22c55e; }
+
+    /* package grid */
+    .pkgs { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .pkg { position:relative; background:var(--bg2); border:1.5px solid var(--border); border-radius:14px; padding:16px 12px; text-align:center; cursor:pointer; transition:border-color .15s, transform .1s; }
+    .pkg:active { transform:scale(.98); }
+    .pkg.selected { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,92,255,.15); }
+    .pkg .coins { font-size:24px; font-weight:800; letter-spacing:-.02em; }
+    .pkg .coins small { font-size:12px; font-weight:600; color:var(--text2); }
+    .pkg .label { font-size:12.5px; color:var(--text2); margin-top:2px; }
+    .pkg .price { font-size:14px; font-weight:700; margin-top:8px; }
+    .pkg .tag { position:absolute; top:-9px; left:50%; transform:translateX(-50%); background:var(--accent); color:#0a0a0d; font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+
+    /* account details */
+    .acct-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); font-size:14px; }
+    .acct-row:last-child { border-bottom:none; }
+    .acct-row .k { color:var(--text2); }
+    .acct-row .v { font-weight:700; text-align:right; }
+    .acct-num { display:flex; align-items:center; gap:8px; }
+    .acct-num .num { font-weight:800; font-size:17px; letter-spacing:.5px; }
+    .copy-btn { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:9px; border:1px solid var(--border); background:var(--bg); color:var(--text); cursor:pointer; flex-shrink:0; }
+    .copy-btn:active { background:var(--accent); color:#0a0a0d; }
+
+    /* countdown */
+    .timer { display:flex; align-items:center; gap:10px; background:rgba(124,92,255,.08); border:1px solid rgba(124,92,255,.25); border-radius:10px; padding:11px 13px; margin:14px 0; font-size:13px; color:var(--text2); line-height:1.45; }
+    .timer .clock { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--text); }
+    .timer.warn { background:rgba(239,68,68,.08); border-color:rgba(239,68,68,.3); }
+    .timer.warn .clock { color:#ef4444; }
+
+    .big-btn { width:100%; font-size:16px; padding:15px; border-radius:12px; font-weight:700; }
+    .wa-btn { background:#25d366; color:#06240f; border:none; }
+    .muted { color:var(--text2); font-size:12.5px; line-height:1.5; }
+    .back { background:none; border:none; color:var(--accent2); font-size:14px; cursor:pointer; padding:6px 0; margin-bottom:6px; }
+    .hidden { display:none !important; }
+    .support-foot { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--text2); font-size:13px; text-decoration:none; margin-top:24px; }
+    .support-foot:hover { color:#25d366; }
+    .spin { display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; vertical-align:-2px; }
+    @keyframes sp { to { transform:rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="brand"><div class="logo-icon">✦</div> VNV Pro</div>
+      <div id="balanceChip" class="balance-chip hidden">Balance: <strong id="balVal">—</strong></div>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="loginView">
+      <h1>Buy Coins</h1>
+      <p class="sub">Sign in to top up your coins. Pay by transfer from your phone, upload your receipt, done.</p>
+      <div class="error-box" id="loginError"></div>
+      <div class="card">
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label" for="email">Email</label>
+            <input type="email" id="email" class="form-input" placeholder="you@example.com" required autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="password">Password</label>
+            <input type="password" id="password" class="form-input" placeholder="Your password" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary w-full big-btn" id="loginBtn" style="margin-top:12px;">Sign In</button>
+        </form>
+      </div>
+      <p class="muted" style="text-align:center;">No account? <a href="signup.html" style="color:var(--accent2);">Sign up</a> · <a href="login.html" style="color:var(--accent2);">Forgot password</a></p>
+    </div>
+
+    <!-- PACKAGES -->
+    <div id="pkgView" class="hidden">
+      <h1>Buy Coins</h1>
+      <p class="sub">Choose a package to top up.</p>
+      <div class="ok-box" id="pkgOk"></div>
+      <div class="pkgs" id="pkgGrid"></div>
+      <a href="#" id="logoutLink" class="muted" style="display:block;text-align:center;margin-top:22px;color:var(--text2);">Log out</a>
+    </div>
+
+    <!-- PAY (transfer + receipt) -->
+    <div id="payView" class="hidden">
+      <button class="back" id="backBtn1">← Choose another package</button>
+      <h1 id="payTitle">Pay</h1>
+      <p class="sub" id="paySub"></p>
+      <div class="error-box" id="payError"></div>
+      <div class="ok-box" id="payOk"></div>
+
+      <div class="card" id="acctCard">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:6px;">Transfer to this account:</div>
+        <div class="acct-row"><span class="k">Bank</span><span class="v" id="acctBank">—</span></div>
+        <div class="acct-row"><span class="k">Name</span><span class="v" id="acctName">—</span></div>
+        <div class="acct-row">
+          <span class="k">Account</span>
+          <span class="acct-num"><span class="num" id="acctNum">—</span>
+            <button class="copy-btn" id="copyBtn" title="Copy account number" aria-label="Copy account number">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <div class="timer" id="timerBox">
+        <span class="clock" id="clock">20:00</span>
+        <span id="timerMsg">This payment window expires in about 20 minutes. Transfer, then upload your receipt below.</span>
+      </div>
+
+      <input type="file" id="receiptFile" accept="image/*" class="hidden" capture="environment">
+      <button class="btn btn-primary w-full big-btn" id="uploadBtn">Upload Receipt</button>
+      <div id="payStatus" class="muted" style="margin-top:12px;"></div>
+
+      <!-- expired -->
+      <div id="expiredBox" class="hidden">
+        <div class="error-box" style="display:block;">Your 20‑minute window has expired. Please contact customer service to confirm your payment.</div>
+        <button class="btn big-btn wa-btn w-full" id="supportBtn1">Contact Customer Service</button>
+        <button class="btn btn-secondary w-full" id="restartBtn" style="margin-top:10px;">Start again</button>
+      </div>
+    </div>
+
+    <!-- PAY (Paystack, big tiers) -->
+    <div id="psView" class="hidden">
+      <button class="back" id="backBtn2">← Choose another package</button>
+      <h1 id="psTitle">Pay</h1>
+      <p class="sub">For this package you'll pay by secure transfer or card — it's confirmed automatically and your coins land instantly.</p>
+      <div class="error-box" id="psError"></div>
+      <div class="card">
+        <div class="acct-row"><span class="k">Package</span><span class="v" id="psPkg">—</span></div>
+        <div class="acct-row"><span class="k">Amount</span><span class="v" id="psAmt">—</span></div>
+        <div class="acct-row"><span class="k">You get</span><span class="v" id="psCoins">—</span></div>
+      </div>
+      <button class="btn btn-primary w-full big-btn" id="psPayBtn">Pay securely now</button>
+      <p class="muted" style="margin-top:12px;">Tap Pay, choose <strong>Bank Transfer</strong> (or card/USSD), and your coins are added the moment the money is confirmed.</p>
+    </div>
+
+    <a id="supportFoot" href="#" target="_blank" class="support-foot">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+      Need help? Contact support
+    </a>
+  </div>
+
+  <div id="toast"></div>
+  <script src="https://js.paystack.co/v2/inline.js"></script>
+  <script>
+  (function(){
+    var cfg = { packages: [], bank: {}, autoMaxNaira: 32000, supportWhatsApp: '+18024402677', paystackEnabled: false };
+    var email = null, selected = null, timerInt = null, endAt = 0, curSession = null;
+
+    function $(id){ return document.getElementById(id); }
+    function show(v){ ['loginView','pkgView','payView','psView'].forEach(function(x){ $(x).classList.toggle('hidden', x!==v); }); }
+    function toast(msg,type){ var t=$('toast'); var e=document.createElement('div'); e.className='toast-item toast-'+(type||'info'); e.textContent=msg; t.appendChild(e); setTimeout(function(){e.remove();},4000); }
+    function waLink(){ var n=(cfg.supportWhatsApp||'+18024402677').replace(/[^\d]/g,''); return 'https://wa.me/'+n+'?text='+encodeURIComponent('Hi, I need help confirming my VNV Pro coin payment.'); }
+    function naira(n){ return '₦'+Number(n||0).toLocaleString(); }
+
+    // ---- session ----
+    function getSession(){ try { return JSON.parse(localStorage.getItem('vnv_session')||'null'); } catch(_){ return null; } }
+
+    async function api(path, body){
+      var r = await fetch(path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      return r.json();
+    }
+
+    // ---- boot ----
+    async function boot(){
+      $('supportFoot').href = waLink();
+      var s = getSession();
+      if (s && s.email){ email = s.email; await enterApp(); } else { show('loginView'); }
+    }
+
+    async function enterApp(){
+      try { var cfgRes = await api('/api/coins', { action:'get_pay_config' }); cfg = Object.assign(cfg, cfgRes || {}); } catch(_){}
+      $('supportFoot').href = waLink();
+      renderPkgs();
+      loadBalance();
+      show('pkgView');
+    }
+
+    async function loadBalance(){
+      try {
+        var d = await api('/api/coins', { action:'balance', email: email });
+        if (typeof d.balance === 'number'){ $('balVal').textContent = Math.floor(d.balance).toLocaleString(); $('balanceChip').classList.remove('hidden'); }
+      } catch(_){}
+    }
+
+    function renderPkgs(){
+      var g = $('pkgGrid'); var pk = cfg.packages || [];
+      if (!pk.length){ g.innerHTML = '<p class="muted" style="grid-column:1/-1;">No packages available right now.</p>'; return; }
+      g.innerHTML = pk.map(function(p){
+        return '<div class="pkg" data-id="'+p.id+'">'+
+          (p.featured?'<div class="tag">POPULAR</div>':'')+
+          '<div class="coins">'+Number(p.coins).toLocaleString()+' <small>coins</small></div>'+
+          '<div class="label">'+esc(p.label||'')+'</div>'+
+          '<div class="price">'+naira(p.priceNaira)+'</div></div>';
+      }).join('');
+      Array.prototype.forEach.call(g.querySelectorAll('.pkg'), function(el){
+        el.addEventListener('click', function(){ pickPkg(el.getAttribute('data-id')); });
+      });
+    }
+    function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+
+    function pickPkg(id){
+      selected = (cfg.packages||[]).find(function(p){ return p.id===id; });
+      if (!selected) return;
+      if (Number(selected.priceNaira) > Number(cfg.autoMaxNaira||32000)) { openPaystack(); }
+      else { openTransfer(); }
+    }
+
+    // ---- small tiers: transfer + receipt + 20-min window ----
+    async function openTransfer(){
+      $('payError').style.display='none'; $('payOk').style.display='none'; $('payStatus').textContent='';
+      $('expiredBox').classList.add('hidden'); $('uploadBtn').classList.remove('hidden'); $('timerBox').classList.remove('hidden'); $('acctCard').classList.remove('hidden');
+      $('payTitle').textContent = selected.label+' — '+naira(selected.priceNaira);
+      $('paySub').textContent = 'Transfer '+naira(selected.priceNaira)+' to the account below, then upload your receipt.';
+      show('payView');
+
+      // resume an unexpired session for this package, else start a new one
+      var saved = loadLocalSession(selected.id);
+      if (saved && (saved.startedAt + saved.ttl*1000) > Date.now()){
+        curSession = saved; applySession(saved);
+      } else {
+        $('acctNum').textContent='…';
+        var d = await api('/api/coins', { action:'start_payment_session', email: email, packageId: selected.id });
+        if (!d || !d.ok){ $('payError').textContent = (d&&d.error)||'Could not start. Try again.'; $('payError').style.display='block'; return; }
+        curSession = { sessionId:d.sessionId, startedAt:d.startedAt, ttl:d.ttl, bank:d.bank };
+        saveLocalSession(selected.id, curSession); applySession(curSession);
+      }
+    }
+    function applySession(s){
+      $('acctBank').textContent = s.bank.bankName || '—';
+      $('acctName').textContent = s.bank.accountName || '—';
+      $('acctNum').textContent = s.bank.accountNumber || '—';
+      endAt = s.startedAt + s.ttl*1000;
+      startTimer();
+    }
+    function loadLocalSession(pid){ try { return JSON.parse(localStorage.getItem('vnv_paysess_'+pid)||'null'); } catch(_){ return null; } }
+    function saveLocalSession(pid,s){ try { localStorage.setItem('vnv_paysess_'+pid, JSON.stringify(s)); } catch(_){} }
+    function clearLocalSession(pid){ try { localStorage.removeItem('vnv_paysess_'+pid); } catch(_){} }
+
+    function startTimer(){
+      if (timerInt) clearInterval(timerInt);
+      tick(); timerInt = setInterval(tick, 1000);
+    }
+    function tick(){
+      var left = Math.max(0, Math.floor((endAt - Date.now())/1000));
+      var m = Math.floor(left/60), s = left%60;
+      $('clock').textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+      if (left <= 120) $('timerBox').classList.add('warn'); else $('timerBox').classList.remove('warn');
+      if (left <= 0){ clearInterval(timerInt); timerInt=null; expire(); }
+    }
+    function expire(){
+      $('uploadBtn').classList.add('hidden');
+      $('timerBox').classList.add('hidden');
+      $('acctCard').classList.add('hidden');
+      $('expiredBox').classList.remove('hidden');
+      if (selected) clearLocalSession(selected.id);
+    }
+
+    // copy account number only
+    $('copyBtn').addEventListener('click', function(){
+      var num = ($('acctNum').textContent||'').replace(/\s/g,'');
+      if (!num || num==='—' || num==='…') return;
+      (navigator.clipboard ? navigator.clipboard.writeText(num) : Promise.reject()).then(function(){ toast('Account number copied','success'); }).catch(function(){
+        var t=document.createElement('textarea'); t.value=num; document.body.appendChild(t); t.select(); try{document.execCommand('copy'); toast('Account number copied','success');}catch(_){ toast('Copy failed','error'); } t.remove();
+      });
+    });
+
+    // receipt upload
+    $('uploadBtn').addEventListener('click', function(){ $('receiptFile').click(); });
+    $('receiptFile').addEventListener('change', function(){ if (this.files && this.files[0]) uploadReceipt(this.files[0]); });
+
+    async function downscale(file, maxDim, q){
+      var dataUrl = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(file); });
+      var img = await new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i);}; i.onerror=rej; i.src=dataUrl; });
+      var w=img.width, h=img.height, sc=Math.min(1, maxDim/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+      var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+      return c.toDataURL('image/jpeg', q);
+    }
+
+    async function uploadReceipt(file){
+      if (!file.type || file.type.indexOf('image/')!==0){ toast('Please upload an image of your receipt','error'); return; }
+      if (!curSession){ toast('Session expired — start again','error'); return; }
+      var btn=$('uploadBtn'), st=$('payStatus');
+      btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span> Checking…';
+      st.style.color='var(--text2)'; st.textContent='Reading your receipt…';
+      try {
+        var imageBase64 = await downscale(file, 1280, 0.8);
+        var d = await api('/api/coins', { action:'receipt_verify', email: email, packageId: selected.id, sessionId: curSession.sessionId, imageBase64: imageBase64 });
+        if (d && d.ok && d.approved){
+          clearLocalSession(selected.id); if (timerInt) clearInterval(timerInt);
+          st.textContent=''; $('payOk').textContent = (d.coins||0).toLocaleString()+' coins added to your account!'; $('payOk').style.display='block';
+          toast('Success — '+(d.coins||0).toLocaleString()+' coins added','success');
+          loadBalance(); setTimeout(function(){ show('pkgView'); $('pkgOk').textContent=(d.coins||0).toLocaleString()+' coins added. Buy more?'; $('pkgOk').style.display='block'; }, 1800);
+        } else if (d && d.ok){
+          clearLocalSession(selected.id); if (timerInt) clearInterval(timerInt);
+          st.textContent=''; $('payOk').textContent = "Receipt received. We'll confirm your payment and add your coins shortly."; $('payOk').style.display='block';
+          toast("Receipt received — we'll confirm shortly",'success');
+        } else if (d && d.expired){
+          expire();
+        } else {
+          st.style.color=''; st.textContent=''; $('payError').textContent = (d&&d.error) || 'Could not process that receipt. Please try again.'; $('payError').style.display='block';
+        }
+      } catch(_){ st.textContent=''; $('payError').textContent='Network error. Please try again.'; $('payError').style.display='block'; }
+      finally { btn.disabled=false; btn.innerHTML=orig; $('receiptFile').value=''; }
+    }
+
+    $('supportBtn1').addEventListener('click', function(){ window.open(waLink(), '_blank'); });
+    $('restartBtn').addEventListener('click', function(){ if(selected){ clearLocalSession(selected.id); openTransfer(); } });
+    $('backBtn1').addEventListener('click', function(){ if(timerInt)clearInterval(timerInt); show('pkgView'); });
+
+    // ---- big tiers: Paystack ----
+    function openPaystack(){
+      $('psError').style.display='none';
+      if (!cfg.paystackEnabled){
+        // Fallback: no Paystack configured → use the transfer+receipt flow anyway
+        openTransfer(); return;
+      }
+      $('psTitle').textContent = selected.label;
+      $('psPkg').textContent = selected.label;
+      $('psAmt').textContent = naira(selected.priceNaira);
+      $('psCoins').textContent = Number(selected.coins).toLocaleString()+' coins';
+      show('psView');
+    }
+    $('backBtn2').addEventListener('click', function(){ show('pkgView'); });
+    $('psPayBtn').addEventListener('click', payWithPaystack);
+
+    async function payWithPaystack(){
+      if (typeof PaystackPop === 'undefined'){ toast('Payment is still loading — try again','error'); return; }
+      var btn=$('psPayBtn'), orig=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin"></span> Starting…';
+      var init;
+      try { init = await api('/api/paystack', { action:'init', email: email, packageId: selected.id }); if (!init || !init.ok) throw new Error(init&&init.error); }
+      catch(e){ $('psError').textContent=(e&&e.message)||'Could not start payment.'; $('psError').style.display='block'; btn.disabled=false; btn.innerHTML=orig; return; }
+      btn.disabled=false; btn.innerHTML=orig;
+      var reference = init.reference;
+      try {
+        var popup = new PaystackPop();
+        popup.resumeTransaction(init.accessCode, {
+          onSuccess: function(txn){ confirmPaystack((txn&&txn.reference)||reference); },
+          onCancel: function(){ toast('Payment cancelled','info'); },
+          onError: function(err){ toast('Payment error: '+((err&&err.message)||'unknown'),'error'); }
+        });
+      } catch(e){ toast('Could not open the payment window','error'); }
+    }
+    async function confirmPaystack(reference){
+      toast('Payment received — adding your coins…','success');
+      for (var i=0;i<3;i++){
+        try { var d = await api('/api/paystack', { action:'verify', reference: reference }); if (d && d.ok){ loadBalance(); show('pkgView'); $('pkgOk').textContent='Success! '+((d.coins||0).toLocaleString())+' coins added.'; $('pkgOk').style.display='block'; toast('Coins added','success'); return; } } catch(_){}
+        await new Promise(function(r){ setTimeout(r,1500); });
+      }
+      loadBalance(); show('pkgView'); $('pkgOk').textContent='Payment received — your coins will appear shortly.'; $('pkgOk').style.display='block';
+    }
+
+    // ---- login ----
+    $('loginForm').addEventListener('submit', async function(e){
+      e.preventDefault(); $('loginError').style.display='none';
+      var em=$('email').value.trim(), pw=$('password').value;
+      if (!em||!pw){ $('loginError').textContent='Enter your email and password.'; $('loginError').style.display='block'; return; }
+      var btn=$('loginBtn'); btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span> Signing in…';
+      try {
+        var d = await api('/api/usercheck', { action:'login', email: em, password: pw });
+        if (d && d.ok){ try{ localStorage.setItem('vnv_session', JSON.stringify({ email: d.email })); }catch(_){} email = d.email; await enterApp(); }
+        else { $('loginError').textContent=(d&&d.error)||'Invalid email or password.'; $('loginError').style.display='block'; }
+      } catch(_){ $('loginError').textContent='Network error. Please try again.'; $('loginError').style.display='block'; }
+      finally { btn.disabled=false; btn.innerHTML=orig; }
+    });
+    $('logoutLink').addEventListener('click', function(e){ e.preventDefault(); try{ localStorage.removeItem('vnv_session'); }catch(_){} location.reload(); });
+
+    boot();
+  })();
+  </script>
+</body>
+</html>

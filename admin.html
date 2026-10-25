@@ -517,6 +517,11 @@
             <input type="text" class="form-input" id="receiptOcrKey" placeholder="helloworld (free demo)">
             <div class="setting-sub" style="margin-top:4px;">Free key from ocr.space (25,000 scans/month). The default demo key works for light testing but is shared and rate-limited.</div>
           </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label">Support WhatsApp number</label>
+            <input type="text" class="form-input" id="receiptSupportWa" placeholder="+18024402677">
+            <div class="setting-sub" style="margin-top:4px;">Shown as the "Contact customer service" button on the mobile pay page (/pay) when a payment window expires.</div>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="saveReceiptSettings()">Save Receipt Settings</button>
         </div>
 
@@ -1463,6 +1468,7 @@
         document.getElementById('receiptDateWindow').value = s.dateWindowDays ?? 3;
         document.getElementById('receiptOcrKey').value = s.ocrKey || '';
         document.getElementById('receiptVerifyName').value = s.verifyName || '';
+        document.getElementById('receiptSupportWa').value = s.supportWhatsApp || '';
         const tgt = rc.target || {};
         const tgtEl = document.getElementById('receiptTarget');
         if (tgtEl) {
@@ -1548,7 +1554,8 @@
           autoMaxNaira: parseInt(document.getElementById('receiptAutoMax').value) || 32000,
           dateWindowDays: parseInt(document.getElementById('receiptDateWindow').value) || 3,
           ocrKey: document.getElementById('receiptOcrKey').value.trim(),
-          verifyName: document.getElementById('receiptVerifyName').value.trim()
+          verifyName: document.getElementById('receiptVerifyName').value.trim(),
+          supportWhatsApp: document.getElementById('receiptSupportWa').value.trim()
         }
       });
       if (data.ok) showToast('Receipt settings saved.', 'success');

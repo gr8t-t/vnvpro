@@ -8,10 +8,10 @@ const PENDING_TOPUPS_KEY = 'vnv_pending_topups';
 
 // Keep in sync with api/coins.js
 const DEFAULT_PACKAGES = [
-  { id: 'pkg_starter',  coins: 720,  priceNaira: 16000,  priceUsd: 10,  label: 'Starter' },
-  { id: 'pkg_standard', coins: 1680, priceNaira: 32000,  priceUsd: 20,  label: 'Standard' },
-  { id: 'pkg_pro',      coins: 4560, priceNaira: 88000,  priceUsd: 55,  label: 'Pro', featured: true },
-  { id: 'pkg_elite',    coins: 8400, priceNaira: 160000, priceUsd: 100, label: 'Elite' },
+  { id: 'pkg_starter',  coins: 900,  priceNaira: 16000,  priceUsd: 10,  label: 'Starter' },
+  { id: 'pkg_standard', coins: 1800, priceNaira: 32000,  priceUsd: 20,  label: 'Standard' },
+  { id: 'pkg_pro',      coins: 5000, priceNaira: 88000,  priceUsd: 55,  label: 'Pro', featured: true },
+  { id: 'pkg_elite',    coins: 9000, priceNaira: 160000, priceUsd: 100, label: 'Elite' },
 ];
 
 const coinKey = (email) => `vnv_coins:${email}`;
