@@ -142,6 +142,30 @@ function extractRef(text) {
   return m ? m[1].toUpperCase() : '';
 }
 
+// Best-effort: pull the PAYER's name off the receipt (the person who sent the money),
+// so the admin can see who paid. Looks near sender-type labels and avoids the
+// recipient (our) name. Imperfect — shown in admin as a hint, email is the anchor.
+function titleCase(s) {
+  return s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+}
+function extractPayerName(text) {
+  const lines = String(text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const looksName = s => /^[A-Za-z][A-Za-z.'\- ]{3,40}$/.test(s)
+    && s.split(/\s+/).length >= 2 && s.split(/\s+/).length <= 4;
+  const senderRe = /\b(sender|payer)\b|^from\b|^paid\s*by\b|debited?\s*account/i;
+  const recipRe  = /\b(recipient|benefic|receiver|credit|^to\b)\b/i;
+  for (let i = 0; i < lines.length; i++) {
+    if (!senderRe.test(lines[i]) || recipRe.test(lines[i])) continue;
+    const after = lines[i].replace(senderRe, '').replace(/[:#\-]/g, ' ').trim();
+    if (looksName(after)) return titleCase(after);
+    for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+      if (recipRe.test(lines[j])) break;
+      if (looksName(lines[j])) return titleCase(lines[j]);
+    }
+  }
+  return '';
+}
+
 // ── usage analytics ───────────────────────────────────────────────────────────
 // Every drain is logged into per-day hashes keyed by hour+feature, so we can chart
 // daily/weekly/monthly totals, time-of-day, and what consumed the coins. Buckets
@@ -432,6 +456,7 @@ export default async function handler(req, res) {
       const statusOk = /\b(success|successful|completed|approved|paid|sent|credit(?:ed)?)\b/i.test(text);
       const dateChk = checkReceiptDate(text, settings.dateWindowDays);
       const ref = extractRef(text);
+      const payerName = extractPayerName(text);   // who paid (best-effort, from the receipt)
 
       if (ref) {
         const usedRef = await redis.get('vnv_receipt_used:ref:' + ref);
@@ -459,7 +484,7 @@ export default async function handler(req, res) {
           const topups = pending ? JSON.parse(pending) : [];
           topups.push({
             id: 'top_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-            email, packageId, packageLabel: pkg.label, coins: pkg.coins,
+            email, payerName, packageId, packageLabel: pkg.label, coins: pkg.coins,
             priceUsd: pkg.priceUsd, priceNaira: pkg.priceNaira, network: 'receipt',
             method: 'receipt', status: 'approved', auto: true, checks,
             createdAt: Date.now(), approvedAt: Date.now(),
@@ -483,7 +508,7 @@ export default async function handler(req, res) {
               dateChk.old && 'old date', ocrError && 'unreadable',
             ].filter(Boolean).join(', ');
         topups.push({
-          id: topupId, email, packageId, packageLabel: pkg.label, coins: pkg.coins,
+          id: topupId, email, payerName, packageId, packageLabel: pkg.label, coins: pkg.coins,
           priceUsd: pkg.priceUsd, priceNaira: pkg.priceNaira, network: 'receipt',
           method: 'receipt', status: 'pending', auto: false, checks, reason,
           imgHash, hasReceipt: true, ref: ref || '', createdAt: Date.now(),
@@ -567,6 +592,19 @@ export default async function handler(req, res) {
       const img = await redis.get('vnv_receipt_img:' + topupId);
       if (!img) return res.status(404).json({ error: 'Receipt image not available (expired or already processed)' });
       return res.status(200).json({ image: img });
+    }
+
+    // ── get_receipt_history (admin: every receipt scan — who paid, incl. auto) ──
+    if (action === 'get_receipt_history') {
+      if (!isAdmin) return res.status(403).json({ error: 'Unauthorized' });
+      const pending = await redis.get(PENDING_TOPUPS_KEY);
+      const topups = pending ? JSON.parse(pending) : [];
+      const limit = Math.min(500, Math.max(1, parseInt(body.limit) || 100));
+      const receipts = topups
+        .filter(t => t.method === 'receipt')
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+        .slice(0, limit);
+      return res.status(200).json({ receipts });
     }
 
     // ── get_receipt_settings (admin) ───────────────────────────────────────────

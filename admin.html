@@ -374,6 +374,19 @@
             </tbody>
           </table>
         </div>
+
+        <h3 style="font-size:16px;font-weight:700;margin:24px 0 4px;">Receipt Scans — who paid</h3>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;">Every receipt uploaded, including the ones auto-approved. "Name" is read off the receipt (best-effort) — the email is the account that paid.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Email</th><th>Name on receipt</th><th>Amount</th><th>Result</th><th>Receipt</th></tr>
+            </thead>
+            <tbody id="receiptHistoryBody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- SETTINGS page -->
@@ -1284,6 +1297,37 @@
       const badge = document.getElementById('approvalsBadge');
       badge.textContent = total;
       badge.classList.toggle('hidden', total === 0);
+
+      loadReceiptHistory();
+    }
+
+    async function loadReceiptHistory() {
+      const body = document.getElementById('receiptHistoryBody');
+      if (!body) return;
+      try {
+        const data = await coinsApi({ action: 'get_receipt_history', limit: 100 });
+        const rows = data.receipts || [];
+        if (rows.length === 0) {
+          body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px;">No receipt scans yet.</td></tr>';
+          return;
+        }
+        const statusChip = (t) => {
+          if (t.status === 'approved') return `<span style="color:var(--success,#30a46c);font-weight:600;">${t.auto ? 'Auto-approved' : 'Approved'}</span>`;
+          if (t.status === 'rejected') return `<span style="color:var(--danger,#e5484d);">Rejected</span>`;
+          return `<span style="color:#e2a500;font-weight:600;">Pending</span>`;
+        };
+        body.innerHTML = rows.map(t => `
+          <tr>
+            <td>${formatDate(t.createdAt)}</td>
+            <td>${escHtml(t.email || '')}</td>
+            <td>${escHtml(t.payerName || '—')}</td>
+            <td>₦${(t.priceNaira || 0).toLocaleString()} → ${(t.coins || 0).toLocaleString()} coins</td>
+            <td>${statusChip(t)}</td>
+            <td>${t.hasReceipt ? `<button class="btn btn-sm" onclick="viewReceipt('${t.id}')">View</button>` : '—'}</td>
+          </tr>`).join('');
+      } catch (_) {
+        body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--danger,#e5484d);padding:16px;">Could not load.</td></tr>';
+      }
     }
 
     async function approveSignup(email) {
