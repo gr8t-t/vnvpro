@@ -84,6 +84,7 @@ async function ocrReceipt(dataUrl, ocrKey) {
   params.append('OCREngine', '2');     // engine 2 reads receipts / mixed layouts best
   params.append('scale', 'true');
   params.append('detectOrientation', 'true');
+  if (dataUrl.startsWith('data:application/pdf')) params.append('filetype', 'PDF');  // bank-app receipts shared as PDF
   const r = await fetch('https://api.ocr.space/parse/image', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -448,8 +449,9 @@ export default async function handler(req, res) {
       if (!email) return res.status(400).json({ error: 'Missing email' });
       const { packageId, imageBase64 } = body;
       if (!packageId) return res.status(400).json({ error: 'Missing packageId' });
-      if (!imageBase64 || typeof imageBase64 !== 'string' || !imageBase64.startsWith('data:image/')) {
-        return res.status(400).json({ error: 'Please upload a valid image' });
+      if (!imageBase64 || typeof imageBase64 !== 'string'
+          || !(imageBase64.startsWith('data:image/') || imageBase64.startsWith('data:application/pdf'))) {
+        return res.status(400).json({ error: 'Please upload a valid receipt image or PDF' });
       }
 
       const pkgs = await getPackages();

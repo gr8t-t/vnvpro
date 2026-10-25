@@ -2056,12 +2056,15 @@ async function submitBankTopup() {
 // The user just picks an image of their transfer receipt. We downscale it in the
 // browser (keeps the upload small and the stored copy tiny) and send it off for
 // automatic verification — they never see the checks, only the result.
-async function downscaleImage(file, maxDim, quality) {
-  const dataUrl = await new Promise((res, rej) => {
+function fileToDataURL(file) {
+  return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => res(r.result); r.onerror = rej;
     r.readAsDataURL(file);
   });
+}
+async function downscaleImage(file, maxDim, quality) {
+  const dataUrl = await fileToDataURL(file);
   const img = await new Promise((res, rej) => {
     const i = new Image();
     i.onload = () => res(i); i.onerror = rej;
@@ -2079,7 +2082,9 @@ async function downscaleImage(file, maxDim, quality) {
 async function handleReceiptFile(file) {
   if (!file) return;
   if (!selectedPkgId) { showToast('Please select a package first.', 'error'); return; }
-  if (!file.type || !file.type.startsWith('image/')) { showToast('Please upload an image of your receipt.', 'error'); return; }
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if (!file.type || (!file.type.startsWith('image/') && !isPdf)) { showToast('Upload a receipt image or PDF.', 'error'); return; }
+  if (file.size > 4 * 1024 * 1024) { showToast('That file is too large — send a photo or a smaller PDF.', 'error'); return; }
 
   const btn = document.getElementById('receiptUploadBtn');
   const status = document.getElementById('receiptStatus');
@@ -2088,7 +2093,7 @@ async function handleReceiptFile(file) {
   if (status) { status.style.color = 'var(--text2)'; status.textContent = 'Reading your receipt…'; }
 
   try {
-    const imageBase64 = await downscaleImage(file, 1280, 0.8);
+    const imageBase64 = isPdf ? await fileToDataURL(file) : await downscaleImage(file, 1280, 0.8);
     const res = await fetch('/api/coins', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'receipt_verify', email: currentEmail, packageId: selectedPkgId, imageBase64 })

@@ -123,9 +123,10 @@
         <span id="timerMsg">This payment window expires in about 20 minutes. Transfer, then upload your receipt below.</span>
       </div>
 
-      <input type="file" id="receiptFile" accept="image/*" class="hidden" capture="environment">
+      <input type="file" id="receiptFile" accept="image/*,application/pdf" class="hidden">
       <button class="btn btn-primary w-full big-btn" id="uploadBtn">Upload Receipt</button>
-      <div id="payStatus" class="muted" style="margin-top:12px;"></div>
+      <p class="muted" style="margin-top:10px;text-align:center;">Take a photo, pick a saved screenshot, or choose a PDF you forwarded/saved from your bank app.</p>
+      <div id="payStatus" class="muted" style="margin-top:8px;"></div>
 
       <!-- expired -->
       <div id="expiredBox" class="hidden">
@@ -285,8 +286,11 @@
     $('uploadBtn').addEventListener('click', function(){ $('receiptFile').click(); });
     $('receiptFile').addEventListener('change', function(){ if (this.files && this.files[0]) uploadReceipt(this.files[0]); });
 
+    function fileToDataUrl(file){
+      return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(file); });
+    }
     async function downscale(file, maxDim, q){
-      var dataUrl = await new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){res(r.result);}; r.onerror=rej; r.readAsDataURL(file); });
+      var dataUrl = await fileToDataUrl(file);
       var img = await new Promise(function(res,rej){ var i=new Image(); i.onload=function(){res(i);}; i.onerror=rej; i.src=dataUrl; });
       var w=img.width, h=img.height, sc=Math.min(1, maxDim/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
       var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
@@ -294,13 +298,15 @@
     }
 
     async function uploadReceipt(file){
-      if (!file.type || file.type.indexOf('image/')!==0){ toast('Please upload an image of your receipt','error'); return; }
+      var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name||'');
+      if (!file.type || (file.type.indexOf('image/')!==0 && !isPdf)){ toast('Upload a receipt image or PDF','error'); return; }
+      if (file.size > 4*1024*1024){ toast('That file is too large — please send a photo or a smaller PDF','error'); return; }
       if (!curSession){ toast('Session expired — start again','error'); return; }
       var btn=$('uploadBtn'), st=$('payStatus');
       btn.disabled=true; var orig=btn.innerHTML; btn.innerHTML='<span class="spin"></span> Checking…';
       st.style.color='var(--text2)'; st.textContent='Reading your receipt…';
       try {
-        var imageBase64 = await downscale(file, 1280, 0.8);
+        var imageBase64 = isPdf ? await fileToDataUrl(file) : await downscale(file, 1280, 0.8);
         var d = await api('/api/coins', { action:'receipt_verify', email: email, packageId: selected.id, sessionId: curSession.sessionId, imageBase64: imageBase64 });
         if (d && d.ok && d.approved){
           clearLocalSession(selected.id); if (timerInt) clearInterval(timerInt);
