@@ -1723,18 +1723,20 @@ async function vmScore(seconds) {
   // In Studio mode rvcServerUrl is the local proxy, which has no /score endpoint,
   // so fall back to the shared URL. In non-Studio mode they're the same server.
   const scoreBase = sharedRvcUrl || rvcServerUrl;
-  if (!selectedVoice || !selectedVoice.folderName || !scoreBase) return null;
+  // Return a SPECIFIC reason on failure so the Test button can show what's wrong.
+  if (!selectedVoice || !selectedVoice.folderName) return { ok: false, error: 'no voice selected' };
+  if (!scoreBase) return { ok: false, error: 'match server not set (shared URL empty)' };
   const i16 = vmToInt16(seconds);
-  if (!i16) return null;
+  if (!i16) return { ok: false, error: 'no converted audio yet — keep talking a few seconds' };
   try {
     const res = await fetch(`${scoreBase.replace(/\/$/, '')}/score?folder=${encodeURIComponent(selectedVoice.folderName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
       body: i16.buffer
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { ok: false, error: `match server HTTP ${res.status}` };
     return await res.json();
-  } catch (_) { return null; }
+  } catch (e) { return { ok: false, error: 'cannot reach match server: ' + (e && e.message ? e.message : e) }; }
 }
 function vmColor(p) { return p >= 70 ? '#22c55e' : p >= 40 ? '#f59e0b' : '#ef4444'; }
 function vmSetLive(p) {
