@@ -29,11 +29,20 @@ FLOOR        = 0.30   # cosine at/below this reads as 0% (a different person)
 # user-supplied reference clip (e.g. elonmuskyy -> a real Elon clip) -> that clip.
 # Any folder not listed here falls back to its previewBase64 from Redis.
 TRAINED_AUDIO = {
-    "gleencook":  [r"C:\Users\USER\Desktop\Applio\datasets\gleencook\gleencook.wav",
-                   r"C:\Users\USER\Desktop\Applio\_gleen_new.wav"],
-    "george":     [r"C:\Users\USER\Desktop\Applio\datasets\george\george_combined.wav"],
-    "elonmuskyy": [r"C:\Users\USER\Desktop\vnvpro\voice models\rawvoice\Elonmuskyyy.mp4"],
-    "zenamae":    [r"C:\Users\USER\Desktop\Applio\datasets\zenamae\zenamae.wav"],
+    "gleencook":     [r"C:\Users\USER\Desktop\Applio\datasets\gleencook\gleencook.wav",
+                      r"C:\Users\USER\Desktop\Applio\_gleen_new.wav"],
+    "george":        [r"C:\Users\USER\Desktop\Applio\datasets\george\george_combined.wav"],
+    "elonmuskyy":    [r"C:\Users\USER\Desktop\vnvpro\voice models\rawvoice\Elonmuskyyy.mp4"],
+    "zenamae":       [r"C:\Users\USER\Desktop\Applio\datasets\zenamae\zenamae.wav"],
+    "gorgeharliono": [r"C:\Users\USER\Desktop\Applio\datasets\gorgeharliono\gorgeharliono.wav"],
+    "jonathan":      [r"C:\Users\USER\Desktop\Applio\datasets\jonathan\jonathan.wav"],
+    "sabrinacarpenter": [r"C:\Users\USER\Desktop\Applio\datasets\sabrinacarpenter\sabrinacarpenter.wav"],
+    "samceiri":         [r"C:\Users\USER\Desktop\Applio\datasets\samceiri\samceiri.wav"],
+    "sophiecunningham": [r"C:\Users\USER\Desktop\Applio\datasets\sophiecunningham\sophiecunningham.wav"],
+    "caitlinclark":     [r"C:\Users\USER\Desktop\Applio\datasets\caitlinclark\caitlinclark.wav"],
+    "rileygreen":       [r"C:\Users\USER\Desktop\Applio\datasets\rileygreen\rileygreen.wav"],
+    "kevincost":        [r"C:\Users\USER\Desktop\Applio\datasets\kevincost\kevincost.wav"],
+    "thechrishinton":   [r"C:\Users\USER\Desktop\Applio\datasets\thechrishinton\thechrishinton.wav"],
 }
 
 _cp = None

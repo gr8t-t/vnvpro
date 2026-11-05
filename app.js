@@ -17,7 +17,9 @@ let studioMode = false;                            // user runs voice on their o
 let sharedRvcUrl = null;                            // the shared voice server URL (admin get_rvc_url)
 
 // Point all voice calls at the right engine: localhost when Studio is on, the
-// shared server otherwise. Every /v2, /convert, /ws, /score call uses rvcServerUrl.
+// shared server otherwise. /v2, /convert, /ws use rvcServerUrl. EXCEPTION: /score
+// (the voice-match meter) always goes to the shared server, because the Studio
+// proxy on the user's own machine has no CAMPPlus/torch and cannot score.
 function applyVoiceRouting() {
   rvcServerUrl = studioMode ? LOCAL_VOICE_URL : sharedRvcUrl;
 }
@@ -1717,11 +1719,15 @@ function vmToInt16(seconds) {
   return i16;
 }
 async function vmScore(seconds) {
-  if (!selectedVoice || !selectedVoice.folderName || !rvcServerUrl) return null;
+  // /score ALWAYS uses the shared server (it has CAMPPlus + the voice references).
+  // In Studio mode rvcServerUrl is the local proxy, which has no /score endpoint,
+  // so fall back to the shared URL. In non-Studio mode they're the same server.
+  const scoreBase = sharedRvcUrl || rvcServerUrl;
+  if (!selectedVoice || !selectedVoice.folderName || !scoreBase) return null;
   const i16 = vmToInt16(seconds);
   if (!i16) return null;
   try {
-    const res = await fetch(`${rvcServerUrl.replace(/\/$/, '')}/score?folder=${encodeURIComponent(selectedVoice.folderName)}`, {
+    const res = await fetch(`${scoreBase.replace(/\/$/, '')}/score?folder=${encodeURIComponent(selectedVoice.folderName)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': 'true' },
       body: i16.buffer
