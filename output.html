@@ -8,7 +8,12 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-    #out { width: 100vw; height: 100vh; object-fit: contain; background: #000; display: block; cursor: pointer; }
+    /* The AI frames are drawn onto this canvas. A canvas is composited into the
+       page like normal pixels, so OBS Window Capture grabs it reliably — a raw
+       <video> playing a WebRTC stream renders on a GPU overlay that OBS (BitBlt)
+       captures as BLACK. The source <video> is hidden and only feeds frames. */
+    #cv  { width: 100vw; height: 100vh; object-fit: contain; background: #000; display: block; cursor: pointer; }
+    #out { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; left: -9999px; }
     #hint {
       position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
       color: rgba(255,255,255,0.85); font-family: system-ui, sans-serif; font-size: 14px;
@@ -29,21 +34,49 @@
   </style>
 </head>
 <body>
-  <video id="out" autoplay playsinline></video>
+  <canvas id="cv"></canvas>
+  <video id="out" autoplay playsinline muted></video>
   <div id="waiting">Waiting for AI output… keep the main tab open.</div>
   <div id="tapfs"><div class="big">⛶ Tap / Click to go Full Screen</div><div>Press Esc to exit full screen</div></div>
   <div id="hint" style="opacity:0;">Click anywhere for full screen · Press Esc to exit</div>
 
   <script>
     const video   = document.getElementById('out');
-    const waiting  = document.getElementById('waiting');
-    const hint     = document.getElementById('hint');
-    const tapfs    = document.getElementById('tapfs');
+    const cv      = document.getElementById('cv');
+    const ctx     = cv.getContext('2d', { alpha: false });
+    const waiting = document.getElementById('waiting');
+    const hint    = document.getElementById('hint');
+    const tapfs   = document.getElementById('tapfs');
+
+    let drawing = false;
+
+    function drawFrame() {
+      // keep the canvas buffer at the stream's real resolution for a crisp, 1:1 feed
+      if (video.videoWidth && (cv.width !== video.videoWidth || cv.height !== video.videoHeight)) {
+        cv.width = video.videoWidth; cv.height = video.videoHeight;
+      }
+      if (video.readyState >= 2 && video.videoWidth) {
+        try { ctx.drawImage(video, 0, 0, cv.width, cv.height); } catch (_) {}
+      }
+    }
+    function startDrawing() {
+      if (drawing) return;
+      drawing = true;
+      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        const cb = () => { drawFrame(); if (drawing) video.requestVideoFrameCallback(cb); };
+        video.requestVideoFrameCallback(cb);
+      } else {
+        const loop = () => { drawFrame(); if (drawing) requestAnimationFrame(loop); };
+        requestAnimationFrame(loop);
+      }
+    }
 
     function attach(stream) {
       if (!stream) return false;
       video.srcObject = stream;
+      video.play().catch(() => {});
       waiting.style.display = 'none';
+      startDrawing();
       return true;
     }
 
@@ -58,7 +91,6 @@
     }
 
     if (!tryGrab()) {
-      // poll until the stream becomes available
       const iv = setInterval(() => { if (tryGrab()) clearInterval(iv); }, 500);
     }
 
@@ -72,7 +104,6 @@
     }
     document.body.addEventListener('click', toggleFs);
 
-    // Hide the prompt overlay once full screen is entered; show hint briefly
     document.addEventListener('fullscreenchange', () => {
       if (document.fullscreenElement) {
         tapfs.classList.add('hidden');
@@ -83,11 +114,16 @@
       }
     });
 
-    // If the main tab closes the stream, show waiting again
+    // If the main tab closes the stream, stop drawing and show waiting again
     setInterval(() => {
       try {
         if (!window.opener || window.opener.closed || !window.opener.aiOutputStream) {
-          if (video.srcObject) { video.srcObject = null; waiting.style.display = 'flex'; }
+          if (video.srcObject) {
+            drawing = false;
+            video.srcObject = null;
+            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+            waiting.style.display = 'flex';
+          }
         }
       } catch (_) {}
     }, 1500);
