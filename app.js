@@ -1030,6 +1030,7 @@ async function startVideoStream() {
       document.getElementById('outputPlaceholder').style.display = 'none';
       window.aiOutputStream = transformedStream;
       outputVideo.style.display = 'block';
+      startOutputMirror();   // draw to canvas so OBS can capture the AI output
     },
   });
 
@@ -1075,6 +1076,42 @@ function stopVideoStream() {
   document.getElementById('outputPlaceholder').style.display = 'flex';
   window.aiOutputStream = null;
   settingsApplied = false;
+  stopOutputMirror();
+}
+
+// ── AI-output canvas mirror (for OBS) ────────────────────────────────────────
+// OBS Window Capture can't grab the browser's hardware <video> surface — it comes
+// through BLACK. So we draw the AI output onto a <canvas>, which OBS captures
+// reliably (regardless of OBS capture method or browser hardware acceleration).
+// outputVideo stays the hidden frame source; outputCanvas is the shown surface.
+let outputMirrorOn = false;
+function startOutputMirror() {
+  const v = document.getElementById('outputVideo');
+  const c = document.getElementById('outputCanvas');
+  if (!v || !c) return;
+  try { v.play && v.play().catch(() => {}); } catch (_) {}
+  c.style.display = 'block';
+  if (outputMirrorOn) return;
+  outputMirrorOn = true;
+  const ctx = c.getContext('2d', { alpha: false });
+  const drawFrame = () => {
+    if (v.videoWidth && (c.width !== v.videoWidth || c.height !== v.videoHeight)) {
+      c.width = v.videoWidth; c.height = v.videoHeight;
+    }
+    if (v.readyState >= 2 && v.videoWidth) { try { ctx.drawImage(v, 0, 0, c.width, c.height); } catch (_) {} }
+  };
+  if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+    const cb = () => { drawFrame(); if (outputMirrorOn) v.requestVideoFrameCallback(cb); };
+    v.requestVideoFrameCallback(cb);
+  } else {
+    const loop = () => { drawFrame(); if (outputMirrorOn) requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  }
+}
+function stopOutputMirror() {
+  outputMirrorOn = false;
+  const c = document.getElementById('outputCanvas');
+  if (c) { c.style.display = 'none'; try { c.getContext('2d').clearRect(0, 0, c.width, c.height); } catch (_) {} }
 }
 
 // ─── SETUP MODE ────────────────────────────────────────────────────────────────
@@ -1155,6 +1192,7 @@ async function startSetupVideo() {
   outputVideo.style.display = 'block';
   document.getElementById('outputPlaceholder').style.display = 'none';
   window.aiOutputStream = setupCanvasStream;   // identical surface to live Decart → OBS unchanged
+  startOutputMirror();   // draw to canvas so OBS can capture the Setup-Mode preview
 }
 
 function stopSetupVideo() {
@@ -1165,6 +1203,7 @@ function stopSetupVideo() {
     setupCanvasStream = null;
     const outputVideo = document.getElementById('outputVideo');
     if (outputVideo) { outputVideo.srcObject = null; outputVideo.style.display = 'none'; }
+    stopOutputMirror();
     const ph = document.getElementById('outputPlaceholder');
     if (ph) ph.style.display = 'flex';
   }
