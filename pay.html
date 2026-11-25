@@ -55,6 +55,10 @@
     .hidden { display:none !important; }
     .support-foot { display:flex; align-items:center; justify-content:center; gap:6px; color:var(--text2); font-size:13px; text-decoration:none; margin-top:24px; }
     .support-foot:hover { color:#25d366; }
+    .notice-banner { display:none; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#ef4444; border-radius:12px; padding:13px 15px; margin-bottom:18px; }
+    .notice-banner.show { display:block; }
+    .notice-banner .nb-title { font-weight:800; font-size:14.5px; display:flex; align-items:center; gap:8px; }
+    .notice-banner .nb-sub { color:var(--text2); font-size:12.5px; margin-top:5px; line-height:1.45; }
     .spin { display:inline-block; width:15px; height:15px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; vertical-align:-2px; }
     @keyframes sp { to { transform:rotate(360deg); } }
   </style>
@@ -64,6 +68,14 @@
     <div class="topbar">
       <div class="brand"><div class="logo-icon">✦</div> VNV Pro</div>
       <div id="balanceChip" class="balance-chip hidden">Balance: <strong id="balVal">—</strong></div>
+    </div>
+
+    <div id="coinsBanner" class="notice-banner" role="alert">
+      <div class="nb-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Coin purchase is temporarily unavailable
+      </div>
+      <div class="nb-sub">We're carrying out a quick update. Please check back shortly — your existing coins and balance are unaffected.</div>
     </div>
 
     <!-- LOGIN -->
@@ -161,6 +173,7 @@
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
   (function(){
+    var COINS_UNAVAILABLE = true; // set to false to re-enable coin purchases
     var cfg = { packages: [], bank: {}, autoMaxNaira: 32000, supportWhatsApp: '+18024402677', paystackEnabled: false };
     var email = null, selected = null, timerInt = null, endAt = 0, curSession = null;
 
@@ -181,6 +194,7 @@
     // ---- boot ----
     async function boot(){
       $('supportFoot').href = waLink();
+      if (COINS_UNAVAILABLE) $('coinsBanner').classList.add('show');
       var s = getSession();
       if (s && s.email){ email = s.email; await enterApp(); } else { show('loginView'); }
     }
@@ -217,6 +231,7 @@
     function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
 
     function pickPkg(id){
+      if (COINS_UNAVAILABLE){ toast('Coin purchase is temporarily unavailable. Please check back soon.','info'); return; }
       selected = (cfg.packages||[]).find(function(p){ return p.id===id; });
       if (!selected) return;
       if (Number(selected.priceNaira) > Number(cfg.autoMaxNaira||32000)) { openPaystack(); }
