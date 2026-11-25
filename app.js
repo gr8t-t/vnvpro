@@ -1982,8 +1982,12 @@ async function loadPackagesAndWallets() {
   } catch (_) {}
 }
 
+const COINS_UNAVAILABLE = true; // set to false to re-enable coin purchases
+
 function openBuyCoins() {
   renderPackages();
+  const banner = document.getElementById('coinsUnavailBanner');
+  if (banner) banner.style.display = COINS_UNAVAILABLE ? 'block' : 'none';
   document.getElementById('buyCoinsModal').classList.remove('hidden');
 }
 
@@ -2007,6 +2011,7 @@ function renderPackages() {
 }
 
 function selectPkg(id) {
+  if (COINS_UNAVAILABLE) { showToast('Coin purchase is temporarily unavailable. Please check back soon.'); return; }
   selectedPkgId = id;
   const pkg = packages.find(p => p.id === id);
   if (pkg) {
@@ -2037,6 +2042,7 @@ function copyField(id) {
 }
 
 async function submitTopup(network) {
+  if (COINS_UNAVAILABLE) { showToast('Coin purchase is temporarily unavailable. Please check back soon.'); return; }
   if (!selectedPkgId) {
     showToast('Please select a package first.', 'error');
     return;
@@ -2127,6 +2133,7 @@ async function downscaleImage(file, maxDim, quality) {
 }
 
 async function handleReceiptFile(file) {
+  if (COINS_UNAVAILABLE) { showToast('Coin purchase is temporarily unavailable. Please check back soon.'); return; }
   if (!file) return;
   if (!selectedPkgId) { showToast('Please select a package first.', 'error'); return; }
   const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
@@ -2173,6 +2180,7 @@ async function handleReceiptFile(file) {
 // Paystack popup with the returned access code, then verify on success so coins
 // land immediately. The webhook credits too, as a backstop if the tab is closed.
 async function payWithPaystack() {
+  if (COINS_UNAVAILABLE) { showToast('Coin purchase is temporarily unavailable. Please check back soon.'); return; }
   if (!selectedPkgId) { showToast('Please select a package first.', 'error'); return; }
   if (typeof PaystackPop === 'undefined') { showToast('Payment is still loading — try again in a moment.', 'error'); return; }
 
