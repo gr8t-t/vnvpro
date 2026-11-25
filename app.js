@@ -1984,6 +1984,13 @@ async function loadPackagesAndWallets() {
 
 const COINS_UNAVAILABLE = true; // set to false to re-enable coin purchases
 
+function applyCoinsBanner() {
+  const pb = document.getElementById('coinsPageBanner');
+  if (pb) pb.style.display = COINS_UNAVAILABLE ? 'flex' : 'none';
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyCoinsBanner);
+else applyCoinsBanner();
+
 function openBuyCoins() {
   renderPackages();
   const banner = document.getElementById('coinsUnavailBanner');
