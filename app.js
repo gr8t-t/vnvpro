@@ -87,6 +87,11 @@ let keyLoadPromise = null;
 let currentEmail = null;
 let coinBalance = 0;
 let realtimeClient = null;
+// fal.ai Lucy realtime (alternative provider, selected as "fal" in the model tray)
+let falConn = null;              // fal.realtime signaling connection
+let falPc = null;                // RTCPeerConnection to Decart (via fal)
+let falBillTimer = null;         // wall-clock coin billing (fal has no generationTick)
+let falConnected = false;
 let referenceFile = null;
 let backgroundFile = null;       // optional uploaded background (composited behind the avatar)
 let bgRemovalMod = null;         // lazy-loaded @imgly/background-removal module
@@ -163,7 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Restore the user's last AI-model choice (defaults to Lucy 2.5)
   try {
     const savedModel = localStorage.getItem('vnv_video_model');
-    if (savedModel === 'lucy-2.1' || savedModel === 'lucy-2.5') videoModelId = savedModel;
+    if (savedModel === 'lucy-2.1' || savedModel === 'lucy-2.5' || savedModel === 'fal') videoModelId = savedModel;
   } catch (_) {}
   const modelSel = document.getElementById('modelSelect');
   if (modelSel) modelSel.value = videoModelId;
@@ -742,10 +747,13 @@ function playPreview(e, id) {
 // Locked in at connect() time, so it can only change before Start; the whole
 // mode-selector row (which holds this dropdown) is greyed while streaming.
 function setVideoModel(v) {
-  videoModelId = (v === 'lucy-2.1') ? 'lucy-2.1' : 'lucy-2.5';
+  videoModelId = (v === 'lucy-2.1' || v === 'fal') ? v : 'lucy-2.5';
   try { localStorage.setItem('vnv_video_model', videoModelId); } catch (_) {}
   applyModelEnhanceDefault();
 }
+// True when the model tray is set to run Lucy through fal.ai instead of Decart.
+function isFalProvider() { return videoModelId === 'fal'; }
+const FAL_MODEL_ID = 'decart/lucy-2-5/realtime';
 
 // Lucy 2.5 renders at a higher resolution, and the Enhance pass on that output
 // tends to add a bright white "bloom"/haze (the blurry white light) that 2.1
@@ -989,8 +997,8 @@ function setStatus(text, live) {
 
 // ─── VIDEO STREAM ──────────────────────────────────────────────────────────────
 async function startVideoStream() {
-  // Ensure API key is loaded
-  if (!decartApiKey) {
+  // Ensure the Decart API key is loaded (fal.ai uses its own server-minted token instead).
+  if (!isFalProvider() && !decartApiKey) {
     const ok = await keyLoadPromise;
     if (!ok) {
       keyLoadPromise = fetchApiKey(currentEmail);
@@ -1017,6 +1025,9 @@ async function startVideoStream() {
   document.getElementById('inputPlaceholder').style.display = 'none';
 
   const outputVideo = document.getElementById('outputVideo');
+
+  // fal.ai provider: run Lucy through fal's WebRTC instead of the Decart SDK.
+  if (isFalProvider()) { await startFalVideoStream(camStream, outputVideo); return; }
 
   // Load the proven Decart SDK (same as the original working project)
   const { createDecartClient, models } = await import('https://esm.sh/@decartai/sdk');
@@ -1064,6 +1075,11 @@ function stopVideoStream() {
     try { realtimeClient.close?.(); } catch (_) {}
     realtimeClient = null;
   }
+  // fal.ai teardown
+  if (falBillTimer) { clearInterval(falBillTimer); falBillTimer = null; }
+  if (falPc) { try { falPc.close(); } catch (_) {} falPc = null; }
+  if (falConn) { try { falConn.close?.(); } catch (_) {} falConn = null; }
+  falConnected = false;
   const inputVideo = document.getElementById('inputVideo');
   if (inputVideo.srcObject) {
     inputVideo.srcObject.getTracks().forEach(t => t.stop());
@@ -1077,6 +1093,133 @@ function stopVideoStream() {
   window.aiOutputStream = null;
   settingsApplied = false;
   stopOutputMirror();
+}
+
+// ── fal.ai Lucy realtime (WebRTC) ────────────────────────────────────────────
+// Runs the SAME Lucy model as Decart, but through fal — so it keeps working when
+// Decart credit purchases are unavailable. fal gives us only the signaling
+// channel (fal.realtime.connect); we build the RTCPeerConnection ourselves.
+// Protocol (reverse-engineered from fal's own playground):
+//   connect -> {type:'iceServers'} -> build PC + create/send offer
+//           -> {type:'answer'} -> setRemoteDescription
+//           -> {type:'icecandidate'} both ways ; {type:'ready'} -> send input
+// Input {prompt, reference_image_url(dataURI)} has no `type` (that's how fal
+// tells it from signaling). No per-second event -> we bill by wall-clock.
+function blobToDataUrl(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = rej;
+    r.readAsDataURL(blob);
+  });
+}
+
+function startFalBilling() {
+  if (falBillTimer) clearInterval(falBillTimer);
+  lastBilledSeconds = 0;
+  let secs = 0;
+  const counter = document.getElementById('billingCounter');
+  falBillTimer = setInterval(() => {
+    if (!isStreaming) return;
+    secs += 1;
+    const el = document.getElementById('billingSecs'); if (el) el.textContent = secs;
+    if (counter) counter.style.display = 'block';
+    drainCoins(1, billMode());
+  }, 1000);
+}
+
+async function startFalVideoStream(camStream, outputVideo) {
+  const { fal } = await import('https://esm.sh/@fal-ai/client');
+  const pendingIce = [];
+  let remoteAttached = false;
+
+  const tokenProvider = async () => {
+    const r = await fetch('/api/fal-token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: currentEmail, app: FAL_MODEL_ID }),
+    });
+    if (!r.ok) throw new Error('Could not authorize fal session');
+    return (await r.text()).trim();
+  };
+
+  function setupPc(iceServers) {
+    const pc = new RTCPeerConnection(iceServers && iceServers.length ? { iceServers } : undefined);
+    falPc = pc;
+    camStream.getTracks().forEach(t => pc.addTrack(t, camStream));
+    pc.ontrack = (ev) => {
+      if (ev.streams && ev.streams[0] && !remoteAttached) {
+        remoteAttached = true;
+        outputVideo.srcObject = ev.streams[0];
+        document.getElementById('outputPlaceholder').style.display = 'none';
+        window.aiOutputStream = ev.streams[0];
+        outputVideo.style.display = 'block';
+        startOutputMirror();   // draw to canvas so OBS can capture the AI output
+      }
+    };
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate && falConn) {
+        falConn.send({ type: 'icecandidate', candidate: {
+          candidate: ev.candidate.candidate, sdpMid: ev.candidate.sdpMid, sdpMLineIndex: ev.candidate.sdpMLineIndex,
+        } });
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      if ((st === 'failed' || st === 'closed' || st === 'disconnected') && isStreaming) {
+        showToast('Video stream disconnected.', 'error');
+        stopStream();
+      }
+    };
+    return pc;
+  }
+
+  falConn = fal.realtime.connect(FAL_MODEL_ID, {
+    connectionKey: `vnvpro-${FAL_MODEL_ID}-${Date.now()}`,
+    throttleInterval: 0,
+    tokenProvider,
+    tokenExpirationSeconds: 120,
+    onError: (err) => {
+      const msg = (err && err.message) || 'Unknown error';
+      if (!msg.toLowerCase().includes('timed out')) showToast('Video stream error: ' + msg, 'error');
+    },
+    onResult: async (e) => {
+      if (!e || typeof e.type !== 'string') return;
+      try {
+        switch (e.type) {
+          case 'ready':
+            falConnected = true;
+            startFalBilling();
+            await applyVideoSettings(true);   // send prompt + reference image
+            break;
+          case 'iceServers':
+          case 'iceservers': {
+            const ice = e.iceServers || e.ice_servers || e.iceservers || [];
+            const servers = ice.map(s => ({ urls: s.urls, username: s.username, credential: s.credential }));
+            const pc = setupPc(servers);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            falConn.send({ type: 'offer', sdp: offer.sdp });
+            break;
+          }
+          case 'answer':
+            if (falPc && e.sdp) {
+              await falPc.setRemoteDescription({ type: 'answer', sdp: e.sdp });
+              while (pendingIce.length) { try { await falPc.addIceCandidate(new RTCIceCandidate(pendingIce.shift())); } catch (_) {} }
+            }
+            break;
+          case 'icecandidate': {
+            const raw = e.candidate || {};
+            const c = { candidate: raw.candidate ?? raw, sdpMid: raw.sdpMid, sdpMLineIndex: raw.sdpMLineIndex };
+            if (falPc && falPc.remoteDescription) { try { await falPc.addIceCandidate(new RTCIceCandidate(c)); } catch (_) {} }
+            else pendingIce.push(c);
+            break;
+          }
+        }
+      } catch (err) {
+        showToast('Video stream error: ' + ((err && err.message) || err), 'error');
+      }
+    },
+  });
 }
 
 // ── AI-output canvas mirror (for OBS) ────────────────────────────────────────
@@ -1257,23 +1400,34 @@ async function buildReferenceImage() {
 }
 
 async function applyVideoSettings(initial) {
-  if (!realtimeClient) {
-    if (!initial) showToast('Start streaming first.', 'info');
-    return;
+  const fal = isFalProvider();
+  if (fal) {
+    if (!falConn || !falConnected) { if (!initial) showToast('Start streaming first.', 'info'); return; }
+  } else {
+    if (!realtimeClient) { if (!initial) showToast('Start streaming first.', 'info'); return; }
   }
-  const prompt = document.getElementById('promptInput').value.trim();
+  let prompt = document.getElementById('promptInput').value.trim();
   const enhance = document.getElementById('enhanceToggle').checked;
-  const payload = { enhance };
-  if (prompt) payload.prompt = prompt;
+  let refBlob = null;
   if (referenceFile && !settingsApplied) {
-    payload.image = await buildReferenceImage();
+    refBlob = await buildReferenceImage();
     const usingBg = !!backgroundFile;
-    if (!prompt) payload.prompt = usingBg
+    if (!prompt) prompt = usingBg
       ? 'Transform my face and body to look exactly like the person in the reference image, and place me in the same background scene shown behind them in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Only change my appearance and the background.'
       : 'Transform my face and body to look exactly like the person in the reference image. Follow my exact movements, pose and hand positions precisely — do not add, invent or change any body or hand movements. Keep all objects, phones, cups and items I hold completely unchanged and clearly visible. Only transform my face, skin, hair and body to match the reference person. Do not blur or remove any objects in the scene.';
   }
   try {
-    await realtimeClient.set(payload);
+    if (fal) {
+      const msg = {};
+      if (prompt) msg.prompt = prompt;
+      if (refBlob) msg.reference_image_url = await blobToDataUrl(refBlob);   // fal wants a data URI
+      if (Object.keys(msg).length) falConn.send(msg);
+    } else {
+      const payload = { enhance };
+      if (prompt) payload.prompt = prompt;
+      if (refBlob) payload.image = refBlob;
+      await realtimeClient.set(payload);
+    }
     settingsApplied = true;
     if (!initial) showToast('Settings applied.', 'success');
   } catch (err) {
