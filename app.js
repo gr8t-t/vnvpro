@@ -1226,10 +1226,17 @@ async function startFalVideoStream(camStream, outputVideo) {
             else pendingIce.push(c);
             break;
           }
-          case 'error':
-            console.log('[fal] SERVER ERROR:', JSON.stringify(e.error), '| full msg:', JSON.stringify(e).slice(0, 400));
-            showToast('fal error: ' + (typeof e.error === 'string' ? e.error : JSON.stringify(e.error || e)).slice(0, 160), 'error');
+          case 'error': {
+            const emsg = (typeof e.error === 'string' ? e.error : JSON.stringify(e.error || e)) || 'fal error';
+            console.log('[fal] SERVER ERROR:', emsg);
+            if (/concurrent|session limit/i.test(emsg)) {
+              showToast('A previous fal session is still closing. Wait ~30s and press Start again.', 'error', 7000);
+            } else {
+              showToast('fal error: ' + emsg.slice(0, 160), 'error');
+            }
+            stopStream();   // release the session immediately so it doesn't linger
             break;
+          }
         }
       } catch (err) {
         showToast('Video stream error: ' + ((err && err.message) || err), 'error');
