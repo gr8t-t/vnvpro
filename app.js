@@ -1129,7 +1129,9 @@ function startFalBilling() {
 }
 
 async function startFalVideoStream(camStream, outputVideo) {
+  console.log('[fal] startFalVideoStream: loading @fal-ai/client…');
   const { fal } = await import('https://esm.sh/@fal-ai/client');
+  console.log('[fal] client loaded; hasRealtimeConnect=', !!(fal && fal.realtime && fal.realtime.connect));
   const pendingIce = [];
   let remoteAttached = false;
 
@@ -1138,8 +1140,11 @@ async function startFalVideoStream(camStream, outputVideo) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: currentEmail, app: FAL_MODEL_ID }),
     });
-    if (!r.ok) throw new Error('Could not authorize fal session');
-    return (await r.text()).trim();
+    console.log('[fal] token endpoint status', r.status);
+    if (!r.ok) { const t = await r.text().catch(()=> ''); console.log('[fal] token error body', t.slice(0,160)); throw new Error('Could not authorize fal session'); }
+    const tk = (await r.text()).trim();
+    console.log('[fal] got token, len', tk.length, 'looksJWT', tk.slice(0,2) === 'ey');
+    return tk;
   };
 
   function setupPc(iceServers) {
@@ -1147,6 +1152,7 @@ async function startFalVideoStream(camStream, outputVideo) {
     falPc = pc;
     camStream.getTracks().forEach(t => pc.addTrack(t, camStream));
     pc.ontrack = (ev) => {
+      console.log('[fal] ontrack: streams=', ev.streams && ev.streams.length);
       if (ev.streams && ev.streams[0] && !remoteAttached) {
         remoteAttached = true;
         outputVideo.srcObject = ev.streams[0];
@@ -1165,6 +1171,7 @@ async function startFalVideoStream(camStream, outputVideo) {
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
+      console.log('[fal] pcState=', st);
       if ((st === 'failed' || st === 'closed' || st === 'disconnected') && isStreaming) {
         showToast('Video stream disconnected.', 'error');
         stopStream();
@@ -1180,13 +1187,16 @@ async function startFalVideoStream(camStream, outputVideo) {
     tokenExpirationSeconds: 120,
     onError: (err) => {
       const msg = (err && err.message) || 'Unknown error';
+      console.log('[fal] onError:', msg, err);
       if (!msg.toLowerCase().includes('timed out')) showToast('Video stream error: ' + msg, 'error');
     },
     onResult: async (e) => {
+      console.log('[fal] msg type=', (e && e.type), 'keys=', (e && typeof e === 'object' ? Object.keys(e) : typeof e));
       if (!e || typeof e.type !== 'string') return;
       try {
         switch (e.type) {
           case 'ready':
+            console.log('[fal] ready — sending input + starting billing');
             falConnected = true;
             startFalBilling();
             await applyVideoSettings(true);   // send prompt + reference image
@@ -1199,6 +1209,7 @@ async function startFalVideoStream(camStream, outputVideo) {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             falConn.send({ type: 'offer', sdp: offer.sdp });
+            console.log('[fal] offer sent, iceServers count=', servers.length);
             break;
           }
           case 'answer':
