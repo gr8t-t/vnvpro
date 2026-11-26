@@ -1231,6 +1231,10 @@ async function startFalVideoStream(camStream, outputVideo) {
       }
     },
   });
+  // fal's realtime connection is lazy — it only opens (calls tokenProvider +
+  // starts the WebRTC signaling) once you send something. Kick it off.
+  try { falConn.send({}); console.log('[fal] kicked off connection with send({})'); }
+  catch (err) { console.log('[fal] initial send failed', err); }
 }
 
 // ── AI-output canvas mirror (for OBS) ────────────────────────────────────────
