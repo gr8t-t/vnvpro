@@ -1160,6 +1160,8 @@ async function startFalVideoStream(camStream, outputVideo) {
         window.aiOutputStream = ev.streams[0];
         outputVideo.style.display = 'block';
         startOutputMirror();   // draw to canvas so OBS can capture the AI output
+        console.log('[fal] remote stream attached — sending prompt + reference now');
+        setTimeout(() => applyVideoSettings(true).catch(() => {}), 300);
       }
     };
     pc.onicecandidate = (ev) => {
@@ -1196,10 +1198,9 @@ async function startFalVideoStream(camStream, outputVideo) {
       try {
         switch (e.type) {
           case 'ready':
-            console.log('[fal] ready — sending input + starting billing');
+            console.log('[fal] ready — starting billing (input deferred until media connects)');
             falConnected = true;
             startFalBilling();
-            await applyVideoSettings(true);   // send prompt + reference image
             break;
           case 'iceServers':
           case 'iceservers': {
@@ -1225,6 +1226,10 @@ async function startFalVideoStream(camStream, outputVideo) {
             else pendingIce.push(c);
             break;
           }
+          case 'error':
+            console.log('[fal] SERVER ERROR:', JSON.stringify(e.error), '| full msg:', JSON.stringify(e).slice(0, 400));
+            showToast('fal error: ' + (typeof e.error === 'string' ? e.error : JSON.stringify(e.error || e)).slice(0, 160), 'error');
+            break;
         }
       } catch (err) {
         showToast('Video stream error: ' + ((err && err.message) || err), 'error');
